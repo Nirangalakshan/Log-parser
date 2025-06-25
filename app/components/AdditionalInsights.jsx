@@ -1,84 +1,69 @@
 "use client";
 
-import React, { useMemo } from "react";
-import { motion } from "framer-motion";
+import { Line } from "react-chartjs-2";
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  PointElement,
+  LineElement,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
 
-const AdditionalInsights = ({ l2MainContext = [], metricsData = [] }) => {
-  // Enhanced debug to inspect data structure
-  useMemo(() => {
-    console.log("metricsData:", JSON.stringify(metricsData, null, 2));
-  }, [metricsData]);
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-  // Prepare data for table
-  const tableData = useMemo(() => {
-    return metricsData.map((item) => ({
-      timestamp: item.timestamp,
-      overVoltage: item.flags?.overVoltage || false,
-      overCurrent: item.flags?.overCurrent || false,
-      overTemp: item.flags?.overTemp || false,
-      underVoltage: item.flags?.underVoltage || false,
-    }));
-  }, [metricsData]);
+export default function AdditionalInsights({ l2Data, metricsData }) {
+  const data = {
+    labels: l2Data.map((d) => d.timestamp),
+    datasets: [
+      {
+        label: "Voltage (V)",
+        data: l2Data.map((d) => d.voltage || 0),
+        borderColor: "#3b82f6",
+        backgroundColor: "rgba(59, 130, 246, 0.2)",
+        tension: 0.1,
+      },
+      {
+        label: "Current (A)",
+        data: l2Data.map((d) => d.current || 0),
+        borderColor: "#10b981",
+        backgroundColor: "rgba(16, 185, 129, 0.2)",
+        tension: 0.1,
+      },
+      {
+        label: "Current Energy (Wh)",
+        data: l2Data.map((d) => d.currentEnergy || 0),
+        borderColor: "#ef4444",
+        backgroundColor: "rgba(239, 68, 68, 0.2)",
+        tension: 0.1,
+      },
+      {
+        label: "Power (W)",
+        data: l2Data.map((d) => d.power || 0),
+        borderColor: "#8b5cf6",
+        backgroundColor: "rgba(139, 92, 246, 0.2)",
+        tension: 0.1,
+      },
+    ],
+  };
+
+  const options = {
+    responsive: true,
+    plugins: {
+      legend: { position: "top" },
+      title: { display: true, text: "Charging Parameters Over Time" },
+    },
+    scales: {
+      x: { title: { display: true, text: "Timestamp" } },
+      y: { title: { display: true, text: "Value" }, beginAtZero: true },
+    },
+  };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5 }}
-      className="bg-white dark:bg-gray-800/50 backdrop-blur-lg p-6 rounded-2xl shadow-xl max-h-[90vh] overflow-y-auto hover:shadow-2xl transition-shadow duration-300"
-      suppressHydrationWarning
-    >
-      <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white sticky top-0 bg-white dark:bg-gray-800/50 z-10">
-        Flag Events Insights
-      </h2>
-
-      <div className="mb-6">
-        <h3 className="text-lg font-medium mb-2 text-gray-800 dark:text-white">
-          Flag Events Table
-        </h3>
-        {tableData.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="bg-gray-100 dark:bg-gray-700">
-                  <th className="p-2 border text-left text-gray-800 dark:text-gray-200">Timestamp</th>
-                  <th className="p-2 border text-left text-gray-800 dark:text-gray-200">Over Voltage</th>
-                  <th className="p-2 border text-left text-gray-800 dark:text-gray-200">Over Current</th>
-                  <th className="p-2 border text-left text-gray-800 dark:text-gray-200">Over Temperature</th>
-                  <th className="p-2 border text-left text-gray-800 dark:text-gray-200">Under Voltage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableData.map((row, index) => (
-                  <tr key={index} className="border-t dark:border-gray-600">
-                    <td className="p-2 text-gray-600 dark:text-gray-300">{row.timestamp}</td>
-                    <td className="p-2 text-gray-600 dark:text-gray-300">{row.overVoltage.toString()}</td>
-                    <td className="p-2 text-gray-600 dark:text-gray-300">{row.overCurrent.toString()}</td>
-                    <td className="p-2 text-gray-600 dark:text-gray-300">{row.overTemp.toString()}</td>
-                    <td className="p-2 text-gray-600 dark:text-gray-300">{row.underVoltage.toString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              No flag events detected in the data.
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-300">
-              MetricsData entries: {metricsData.length}
-            </p>
-          </div>
-        )}
-      </div>
-    </motion.div>
+    <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+      <Line data={data} options={options} />
+    </div>
   );
-};
-
-export default React.memo(AdditionalInsights, (prevProps, nextProps) => {
-  return (
-    prevProps.l2MainContext === nextProps.l2MainContext &&
-    prevProps.metricsData === nextProps.metricsData
-  );
-});
+}
