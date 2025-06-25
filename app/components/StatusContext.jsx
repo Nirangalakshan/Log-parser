@@ -394,7 +394,7 @@ function StatusContext({ l2MainState = [], l2MainContext = [] }) {
               <Line options={chartOptions} data={energyChartData} />
             </>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400">No energy data to display.</p>
+            <p className="text-gray-500 dark:text-gray-400 text-center">No energy data to display.</p>
           )
         ) : powerData.length > 0 ? (
           <>
@@ -404,7 +404,7 @@ function StatusContext({ l2MainState = [], l2MainContext = [] }) {
             <Line options={chartOptions} data={powerChartData} />
           </>
         ) : (
-          <p className="text-gray-500 dark:text-gray-400">No power data to display.</p>
+          <p className="text-gray-500 dark:text-gray-400 text-center">No power data to display.</p>
         )}
       </div>
     </motion.div>
