@@ -1,247 +1,62 @@
 // "use client";
 
-// import React from 'react';
-// import { motion } from 'framer-motion';
-// import StatusBadge from './StatusBadge';
-
-// function StatusContext({ l2MainState, l2MainContext }) {
-//   return (
-//     <motion.div
-//       initial={{ opacity: 0, y: 20 }}
-//       animate={{ opacity: 1, y: 0 }}
-//       transition={{ duration: 0.6 }}
-//       className="bg-gradient-card dark:bg-dark-gradient-card p-6 rounded-2xl shadow-neumorphic dark:shadow-dark-neumorphic max-h-[400px] overflow-y-auto hover:shadow-xl transition-all duration-300"
-//       suppressHydrationWarning
-//     >
-//       <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-white sticky top-0 bg-gradient-card dark:bg-dark-gradient-card z-10">
-//         Charger Status
-//       </h2>
-
-//       <motion.div
-//         initial={{ opacity: 0 }}
-//         animate={{ opacity: 1 }}
-//         transition={{ duration: 0.5 }}
-//         className="space-y-4 max-h-[400px] overflow-y-auto"
-//       >
-//         {l2MainState.map((state, index) => (
-//           <motion.div
-//             key={index}
-//             className="flex justify-between items-center"
-//             initial={{ x: -20 }}
-//             animate={{ x: 0 }}
-//             transition={{ duration: 0.4, delay: index * 0.05 }}
-//           >
-//             <span className="text-sm text-gray-600 dark:text-gray-400">{state.timestamp}</span>
-//             <div className="space-x-2">
-//               <StatusBadge status={state.heartbeat} />
-//               <StatusBadge status={state.meterValues} />
-//             </div>
-//           </motion.div>
-//         ))}
-//       </motion.div>
-
-//       <h2 className="text-xl font-semibold mb-4 mt-6 text-gray-800 dark:text-white sticky top-0 bg-gradient-card dark:bg-dark-gradient-card z-10">
-//         Charging Context
-//       </h2>
-
-//       <motion.div
-//         initial={{ height: 0 }}
-//         animate={{ height: 'auto' }}
-//         transition={{ duration: 0.6 }}
-//       >
-//         <table className="w-full text-sm">
-//           <thead>
-//             <tr className="bg-gradient-to-r from-gray-100 to-gray-200 dark:from-gray-700 dark:to-gray-600">
-//               <th className="p-2 text-left text-gray-800 dark:text-white">Timestamp</th>
-//               <th className="p-2 text-left text-gray-800 dark:text-white">Transaction ID</th>
-//               <th className="p-2 text-left text-gray-800 dark:text-white">Energy (kWh)</th>
-//               <th className="p-2 text-left text-gray-800 dark:text-white">Cost ($)</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {l2MainContext.map((context, index) => (
-//               <tr key={index} className="border-t border-gray-200 dark:border-gray-800">
-//                 <td className="p-2 text-gray-600 dark:text-gray-300">{context.timestamp}</td>
-//                 <td className="p-2 text-gray-600 dark:text-gray-300">{context.transactionId}</td>
-//                 <td className="p-2 text-gray-600 dark:text-gray-300">{context.consumedEnergy.toFixed(2)}</td>
-//                 <td className="p-2 text-gray-600 dark:text-gray-300">{context.cost.toFixed(2)}</td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       </motion.div>
-//     </motion.div>
-//   );
-// }
-
-// export default StatusContext;
-
-
-
-
-
-
-
-// "use client";
-
-// import React, { useMemo } from "react";
+// import React, { useMemo, useState } from "react";
 // import { motion } from "framer-motion";
-// import { Line } from "react-chartjs-2";
-// import {
-//   Chart as ChartJS,
-//   LineElement,
-//   PointElement,
-//   CategoryScale,
-//   LinearScale,
-//   TimeScale,
-//   Title,
-//   Tooltip,
-//   Legend,
-// } from "chart.js";
-// import "chartjs-adapter-date-fns";
-// import { enUS } from "date-fns/locale";
 // import StatusBadge from "./StatusBadge";
+// import dayjs from "dayjs";
 
-// ChartJS.register(
-//   LineElement,
-//   PointElement,
-//   CategoryScale,
-//   LinearScale,
-//   TimeScale,
-//   Title,
-//   Tooltip,
-//   Legend
-// );
+// function StatusContext({ l2MainState = [], l2MainContext = [] }) {
+//   // Selected transaction ID as string from dropdown
+//   const [selectedTransactionId, setSelectedTransactionId] = useState("");
+//   // Sort direction state
+//   const [sortDirection, setSortDirection] = useState("asc"); // "asc" or "desc"
 
-// const MAX_DISPLAY_ITEMS = 40000;
-
-// function StatusContext({ l2MainState, l2MainContext }) {
-//   // Downsample l2MainContext for the chart
-//   const chartData = useMemo(() => {
-//     const step = Math.ceil(l2MainContext.length / MAX_DISPLAY_ITEMS);
-//     const labels = [];
-//     const energyData = [];
-
-//     for (let i = 0; i < l2MainContext.length && i < MAX_DISPLAY_ITEMS; i += step) {
-//       labels.push(new Date(l2MainContext[i].timestamp));
-//       energyData.push(l2MainContext[i].consumedEnergy);
-//     }
-
-//     return {
-//       labels,
-//       datasets: [
-//         {
-//           label: "Consumed Energy (kWh)",
-//           data: energyData,
-//           borderColor: "#2563eb", // Changed to a vibrant blue for visibility
-//           backgroundColor: (context) => {
-//             const ctx = context.chart.ctx;
-//             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-//             gradient.addColorStop(0, "rgba(37, 99, 235, 0.4)"); // Adjusted to match borderColor
-//             gradient.addColorStop(1, "rgba(37, 99, 235, 0.05)");
-//             return gradient;
-//           },
-//           fill: true,
-//           tension: 0.4,
-//           pointRadius: 3,
-//           pointHoverRadius: 6,
-//           pointBackgroundColor: "#2563eb", // Match point color to line
-//           pointBorderColor: "#2563eb", // Changed from white to match line
-//           pointBorderWidth: 2,
-//         },
-//       ],
-//     };
+//   // Extract timestamp from raw or timestamp field
+//   const contextWithTimestamps = useMemo(() => {
+//     return l2MainContext.map((item) => {
+//       const rawString = item.timestamp ?? item.raw ?? "";
+//       const found = rawString.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+//       const ts = found ? found[1] : null;
+//       return { ...item, timestamp: ts };
+//     });
 //   }, [l2MainContext]);
 
-//   const chartOptions = {
-//     responsive: true,
-//     maintainAspectRatio: false,
-//     plugins: {
-//       title: {
-//         display: true,
-//         text: "Charging Energy Over Time",
-//         color: "#1f2937",
-//         font: { size: 18, weight: "bold", family: "'Inter', sans-serif" },
-//         padding: { top: 10, bottom: 20 },
-//       },
-//       legend: {
-//         display: false, // Hide legend for a cleaner look
-//       },
-//       tooltip: {
-//         enabled: true,
-//         backgroundColor: "rgba(17, 24, 39, 0.95)",
-//         titleFont: { size: 14, family: "'Inter', sans-serif" },
-//         bodyFont: { size: 12, family: "'Inter', sans-serif" },
-//         padding: 12,
-//         cornerRadius: 8,
-//         boxPadding: 6,
-//         callbacks: {
-//           label: (context) => `${context.parsed.y.toFixed(2)} kWh`,
-//         },
-//       },
-//     },
-//     scales: {
-//       x: {
-//         type: "time",
-//         time: {
-//           unit: "minute",
-//           displayFormats: { minute: "HH:mm" },
-//           locale: enUS,
-//         },
-//         title: {
-//           display: true,
-//           text: "Time",
-//           color: "#6b7280",
-//           font: { size: 12, family: "'Inter', sans-serif" },
-//         },
-//         ticks: {
-//           color: "#6b7280",
-//           maxTicksLimit: 6,
-//           maxRotation: 0,
-//           autoSkip: true,
-//           font: { size: 10, family: "'Inter', sans-serif" },
-//         },
-//         grid: {
-//           display: false, // Remove x-axis grid lines for a cleaner look
-//         },
-//       },
-//       y: {
-//         title: {
-//           display: true,
-//           text: "Energy (kWh)",
-//           color: "#6b7280",
-//           font: { size: 12, family: "'Inter', sans-serif" },
-//         },
-//         ticks: {
-//           color: "#6b7280",
-//           maxTicksLimit: 5,
-//           callback: (value) => `${value.toFixed(2)}`,
-//           font: { size: 10, family: "'Inter', sans-serif" },
-//         },
-//         grid: {
-//           color: "rgba(209, 213, 219, 0.2)",
-//           drawBorder: false,
-//         },
-//         beginAtZero: true,
-//       },
-//     },
-//     interaction: {
-//       mode: "nearest",
-//       intersect: false,
-//       axis: "x",
-//     },
-//     animation: {
-//       duration: 1000,
-//       easing: "easeOutCubic",
-//     },
-//   };
+//   // Unique transaction IDs for dropdown
+//   const transactionIds = useMemo(() => {
+//     const ids = new Set(contextWithTimestamps.map((item) => item.transactionId));
+//     return ["", ...Array.from(ids).filter(Boolean)];
+//   }, [contextWithTimestamps]);
+
+//   // Convert selectedTransactionId string to number for comparison
+//   const selectedTxIdNumber = Number(selectedTransactionId);
+
+//   // Filter and sort data by timestamp
+//   const filteredAndSortedContext = useMemo(() => {
+//     const dataToSort =
+//       selectedTransactionId && selectedTransactionId !== ""
+//         ? contextWithTimestamps.filter(
+//             (item) => item.transactionId === selectedTxIdNumber
+//           )
+//         : contextWithTimestamps;
+
+//     const sorted = dataToSort
+//       .filter((item) => item.timestamp)
+//       .slice()
+//       .sort((a, b) => {
+//         const timeA = dayjs(a.timestamp, "YYYY-MM-DD HH:mm:ss").valueOf();
+//         const timeB = dayjs(b.timestamp, "YYYY-MM-DD HH:mm:ss").valueOf();
+//         return sortDirection === "asc" ? timeA - timeB : timeB - timeA;
+//       });
+
+//     return sorted;
+//   }, [contextWithTimestamps, selectedTransactionId, selectedTxIdNumber, sortDirection]);
 
 //   return (
 //     <motion.div
 //       initial={{ opacity: 0, y: 20 }}
 //       animate={{ opacity: 1, y: 0 }}
 //       transition={{ duration: 0.6, ease: "easeOut" }}
-//       className="bg-white dark:bg-gray-900/80 backdrop-blur-md p-6 rounded-2xl shadow-lg dark:shadow-dark-lg max-h-[80vh] overflow-y-auto hover:shadow-xl transition-all duration-300"
+//       className="bg-white dark:bg-gray-900/80 backdrop-blur-md p-6 rounded-2xl shadow-lg max-h-[90vh] overflow-y-auto hover:shadow-xl transition-all duration-300"
 //       suppressHydrationWarning
 //     >
 //       {/* Charger Status Section */}
@@ -271,33 +86,72 @@
 //         ))}
 //       </motion.div>
 
-//       {/* Energy Consumption Graph Section */}
-//       <h2 className="text-xl font-semibold mb-4 mt-6 text-gray-800 dark:text-gray-100 sticky top-0 bg-white dark:bg-gray-900/80 z-10">
-//         Energy Consumption
+//       {/* Filters & Sorting Controls */}
+//       <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+//         <div>
+//           <label htmlFor="transactionId" className="mr-2 text-gray-800 dark:text-gray-100">
+//             Select Transaction ID:
+//           </label>
+//           <select
+//             id="transactionId"
+//             value={selectedTransactionId}
+//             onChange={(e) => setSelectedTransactionId(e.target.value)}
+//             className="p-2 border rounded bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+//           >
+//             {transactionIds.map((id) => (
+//               <option key={id} value={id}>
+//                 {id || "All"}
+//               </option>
+//             ))}
+//           </select>
+//         </div>
+//         <div>
+//           <button
+//             onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+//             className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+//           >
+//             Sort: {sortDirection === "asc" ? "Oldest First" : "Newest First"}
+//           </button>
+//         </div>
+//       </div>
+
+//       {/* Energy and Power Data Table Section */}
+//       <h2 className="text-xl font-semibold mb-4 text-gray-800 dark:text-gray-100">
+//         Energy and Power Data
 //       </h2>
-//       <motion.div
-//         initial={{ opacity: 0, scale: 0.95 }}
-//         animate={{ opacity: 1, scale: 1 }}
-//         transition={{ duration: 0.5, ease: "easeOut" }}
-//         className="relative"
-//       >
-//         {l2MainContext.length > 0 ? (
-//           <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-xl shadow-inner">
-//             <div style={{ height: "350px" }}>
-//               <Line data={chartData} options={chartOptions} />
-//             </div>
-//             {l2MainContext.length >= MAX_DISPLAY_ITEMS && (
-//               <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-//                 Showing {MAX_DISPLAY_ITEMS} of {l2MainContext.length.toLocaleString()} data points for performance.
-//               </p>
+//       <div className="overflow-x-auto">
+//         <table className="w-full text-sm text-left text-gray-700 dark:text-gray-300">
+//           <thead className="text-xs uppercase bg-gray-50 dark:bg-gray-800 sticky top-0">
+//             <tr>
+//               <th className="px-4 py-2">Timestamp</th>
+//               <th className="px-4 py-2">Transaction ID</th>
+//               <th className="px-4 py-2">Energy (kWh)</th>
+//               <th className="px-4 py-2">Power (kW)</th>
+//             </tr>
+//           </thead>
+//           <tbody>
+//             {filteredAndSortedContext.length > 0 ? (
+//               filteredAndSortedContext.map((item, index) => (
+//                 <tr
+//                   key={index}
+//                   className="bg-white dark:bg-gray-900 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800"
+//                 >
+//                   <td className="px-4 py-2">{item.timestamp}</td>
+//                   <td className="px-4 py-2">{item.transactionId ?? "N/A"}</td>
+//                   <td className="px-4 py-2">{(item.consumedEnergy ?? 0).toFixed(2)}</td>
+//                   <td className="px-4 py-2">{(item.power ?? 0).toFixed(2)}</td>
+//                 </tr>
+//               ))
+//             ) : (
+//               <tr>
+//                 <td colSpan={4} className="px-4 py-2 text-center text-gray-500 dark:text-gray-400">
+//                   No energy or power data available.
+//                 </td>
+//               </tr>
 //             )}
-//           </div>
-//         ) : (
-//           <p className="text-sm text-gray-500 dark:text-gray-400">
-//             No energy data available to display.
-//           </p>
-//         )}
-//       </motion.div>
+//           </tbody>
+//         </table>
+//       </div>
 //     </motion.div>
 //   );
 // }
@@ -309,162 +163,155 @@
 
 
 
-
 "use client";
 
 import React, { useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Line } from "react-chartjs-2";
+import StatusBadge from "./StatusBadge";
+import dayjs from "dayjs";
+
 import {
   Chart as ChartJS,
-  LineElement,
-  PointElement,
   CategoryScale,
   LinearScale,
-  TimeScale,
+  PointElement,
+  LineElement,
   Title,
   Tooltip,
   Legend,
-  Filler,
 } from "chart.js";
-import "chartjs-adapter-date-fns";
-import { enUS } from "date-fns/locale";
-import StatusBadge from "./StatusBadge";
-import { Button } from "@/components/ui/button";
+
+import { Line } from "react-chartjs-2";
 
 ChartJS.register(
-  LineElement,
-  PointElement,
   CategoryScale,
   LinearScale,
-  TimeScale,
+  PointElement,
+  LineElement,
   Title,
   Tooltip,
-  Legend,
-  Filler
+  Legend
 );
 
-const MAX_DISPLAY_ITEMS = 40000;
-
 function StatusContext({ l2MainState = [], l2MainContext = [] }) {
-  const [view, setView] = useState("energy");
+  const [selectedTransactionId, setSelectedTransactionId] = useState("");
+  const [sortDirection, setSortDirection] = useState("asc"); // "asc" or "desc"
+  const [showGraph, setShowGraph] = useState("energy"); // "energy" or "power"
 
+  const contextWithTimestamps = useMemo(() => {
+    return l2MainContext.map((item) => {
+      const rawString = item.timestamp ?? item.raw ?? "";
+      const found = rawString.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})/);
+      const ts = found ? found[1] : null;
+      return { ...item, timestamp: ts };
+    });
+  }, [l2MainContext]);
 
-  const toggleView = () => {
-    setView((prev) => (prev === "energy" ? "power" : "energy"));
+  const transactionIds = useMemo(() => {
+    const ids = new Set(contextWithTimestamps.map((item) => item.transactionId));
+    return ["", ...Array.from(ids).filter(Boolean)];
+  }, [contextWithTimestamps]);
+
+  const selectedTxIdNumber = Number(selectedTransactionId);
+
+  const filteredAndSortedContext = useMemo(() => {
+    const dataToSort =
+      selectedTransactionId && selectedTransactionId !== ""
+        ? contextWithTimestamps.filter(
+            (item) => item.transactionId === selectedTxIdNumber
+          )
+        : contextWithTimestamps;
+
+    const sorted = dataToSort
+      .filter((item) => item.timestamp)
+      .slice()
+      .sort((a, b) => {
+        const timeA = dayjs(a.timestamp, "YYYY-MM-DD HH:mm:ss").valueOf();
+        const timeB = dayjs(b.timestamp, "YYYY-MM-DD HH:mm:ss").valueOf();
+        return sortDirection === "asc" ? timeA - timeB : timeB - timeA;
+      });
+
+    return sorted;
+  }, [contextWithTimestamps, selectedTransactionId, selectedTxIdNumber, sortDirection]);
+
+  // Prepare data for charts
+  const chartLabels = filteredAndSortedContext.map((item) =>
+    dayjs(item.timestamp).format("HH:mm:ss")
+  );
+
+  const energyData = filteredAndSortedContext.map((item) => item.consumedEnergy ?? 0);
+  const powerData = filteredAndSortedContext.map((item) => item.power ?? 0);
+
+  const energyChartData = {
+    labels: chartLabels,
+    datasets: [
+      {
+        label: "Energy (kWh)",
+        data: energyData,
+        borderColor: "rgb(34, 197, 94)", // green
+        backgroundColor: "rgba(34, 197, 94, 0.3)",
+        tension: 0.3,
+        borderWidth: 1,
+        fill: true,
+      },
+    ],
   };
 
-  const { chartData, chartOptions } = useMemo(() => {
-    const step = Math.ceil(l2MainContext.length / MAX_DISPLAY_ITEMS);
-    const labels = [];
-    const values = [];
+  const powerChartData = {
+    labels: chartLabels,
+    datasets: [
+      {
+        label: "Power (kW)",
+        data: powerData,
+        borderColor: "rgb(59, 130, 246)", // blue
+        backgroundColor: "rgba(59, 130, 246, 0.3)",
+        tension: 0.3,
+        borderWidth: 1,
+        fill: true,
+      },
+    ],
+  };
 
-    for (let i = 0; i < l2MainContext.length && i < MAX_DISPLAY_ITEMS; i += step) {
-      const item = l2MainContext[i];
-      if (!item?.timestamp) continue;
-      labels.push(new Date(item.timestamp));
-
-      if (view === "energy") {
-        values.push(item.consumedEnergy || 0);
-      } else {
-        values.push(item.power || 0); // Make sure your data includes 'power'
-      }
-    }
-
-    const color = view === "energy" ? "#3b82f6" : "#f97316";
-
-    const data = {
-      labels,
-      datasets: [
-        {
-          label: view === "energy" ? "Consumed Energy (kWh)" : "Power (kW)",
-          data: values,
-          borderColor: color,
-          pointRadius: 1,
-          pointHoverRadius: 3,
-          pointBackgroundColor: color,
-          backgroundColor: (ctx) => {
-            const gradient = ctx.chart.ctx.createLinearGradient(0, 0, 0, 300);
-            gradient.addColorStop(0, view === "energy" ? "rgba(59,130,246,0.3)" : "rgba(249,115,22,0.3)");
-            gradient.addColorStop(1, "rgba(255,255,255,0)");
-            return gradient;
-          },
-          tension: 0.4,
-          fill: true,
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false, // let’s control height via container style
+    interaction: {
+      mode: "index",
+      intersect: false,
+    },
+    stacked: false,
+    plugins: {
+      legend: {
+        position: "top",
+        labels: {
+          color: "#374151", // dark text color
         },
-      ],
-    };
-
-    const options = {
-      responsive: true,
-      maintainAspectRatio: false,
-      interaction: {
-        mode: "index",
+      },
+      title: {
+        display: false,
+      },
+      tooltip: {
+        enabled: true,
+        mode: "nearest",
         intersect: false,
       },
-      plugins: {
-        title: {
-          display: true,
-          text: view === "energy" ? "Energy Consumption Over Time" : "Power Output Over Time",
-          color: "#1f2937",
-          font: { size: 18, weight: "bold", family: "'Inter', sans-serif" },
-          padding: { top: 10, bottom: 20 },
-        },
-        tooltip: {
-          enabled: true,
-          backgroundColor: "rgba(31, 41, 55, 0.9)",
-          titleFont: { size: 13 },
-          bodyFont: { size: 12 },
-          callbacks: {
-            label: (ctx) => `${ctx.parsed.y.toFixed(2)} ${view === "energy" ? "kWh" : "kW"}`,
-          },
-        },
-        legend: { display: false },
-      },
-      scales: {
-        x: {
-          type: "time",
-          time: {
-            unit: "minute",
-            displayFormats: { minute: "HH:mm" },
-            locale: enUS,
-          },
-          title: {
-            display: true,
-            text: "Time",
-            color: "#6b7280",
-            font: { size: 12 },
-          },
-          ticks: {
-            color: "#6b7280",
-            font: { size: 10 },
-            maxTicksLimit: 6,
-          },
-          grid: { display: false },
-        },
-        y: {
-          beginAtZero: true,
-          title: {
-            display: true,
-            text: view === "energy" ? "Energy (kWh)" : "Power (kW)",
-            color: "#6b7280",
-            font: { size: 12 },
-          },
-          ticks: {
-            color: "#6b7280",
-            font: { size: 10 },
-            callback: (value) => `${Number(value).toFixed(1)}`,
-          },
-          grid: {
-            color: "rgba(203, 213, 225, 0.2)",
-            drawBorder: false,
-          },
+    },
+    scales: {
+      x: {
+        ticks: { color: "#374151" },
+        grid: {
+          display: false,
         },
       },
-    };
-
-    return { chartData: data, chartOptions: options };
-  }, [l2MainContext, view]);
+      y: {
+        ticks: { color: "#374151" },
+        grid: {
+          borderDash: [4, 4],
+          color: "#d1d5db", // light gray grid lines
+        },
+      },
+    },
+  };
 
   return (
     <motion.div
@@ -501,35 +348,65 @@ function StatusContext({ l2MainState = [], l2MainContext = [] }) {
         ))}
       </motion.div>
 
-      {/* Energy/Power Graph Section */}
-      <div className="flex justify-between items-center mt-6 mb-2">
-        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-100">
-          {view === "energy" ? "Energy Graph" : "Power Graph"}
-        </h2>
-        <Button variant="outline" onClick={toggleView}>
-          Switch to {view === "energy" ? "Power" : "Energy"}
-        </Button>
+      {/* Filters & Sorting Controls */}
+      <div className="mt-6 flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-4">
+        <div>
+          <label htmlFor="transactionId" className="mr-2 text-gray-800 dark:text-gray-100">
+            Select Transaction ID:
+          </label>
+          <select
+            id="transactionId"
+            value={selectedTransactionId}
+            onChange={(e) => setSelectedTransactionId(e.target.value)}
+            className="p-2 border rounded bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-gray-300"
+          >
+            {transactionIds.map((id) => (
+              <option key={id} value={id}>
+                {id || "All"}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex gap-3">
+          <button
+            onClick={() => setSortDirection(sortDirection === "asc" ? "desc" : "asc")}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+          >
+            Sort: {sortDirection === "asc" ? "Oldest First" : "Newest First"}
+          </button>
+          <button
+            onClick={() => setShowGraph(showGraph === "energy" ? "power" : "energy")}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition"
+          >
+            Show: {showGraph === "energy" ? "Power" : "Energy"}
+          </button>
+        </div>
       </div>
 
-      <motion.div
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="relative bg-gray-50 dark:bg-gray-800/50 p-4 rounded-xl shadow-inner"
-      >
-        {l2MainContext.length > 0 ? (
-          <div style={{ height: "350px" }}>
-            <Line data={chartData} options={chartOptions} />
-          </div>
+      {/* Chart Container with fixed smaller height */}
+      <div style={{ height: "300px" }}>
+        {showGraph === "energy" ? (
+          energyData.length > 0 ? (
+            <>
+              <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-100">
+                Energy (kWh)
+              </h3>
+              <Line options={chartOptions} data={energyChartData} />
+            </>
+          ) : (
+            <p className="text-gray-500 dark:text-gray-400">No energy data to display.</p>
+          )
+        ) : powerData.length > 0 ? (
+          <>
+            <h3 className="text-lg font-semibold mb-2 text-gray-800 dark:text-gray-100">
+              Power (kW)
+            </h3>
+            <Line options={chartOptions} data={powerChartData} />
+          </>
         ) : (
-          <p className="text-sm text-gray-500 dark:text-gray-400">No energy data available to display.</p>
+          <p className="text-gray-500 dark:text-gray-400">No power data to display.</p>
         )}
-        {l2MainContext.length >= MAX_DISPLAY_ITEMS && (
-          <p className="text-sm text-gray-400 mt-2">
-            Displaying {MAX_DISPLAY_ITEMS} of {l2MainContext.length.toLocaleString()} data points for performance.
-          </p>
-        )}
-      </motion.div>
+      </div>
     </motion.div>
   );
 }
