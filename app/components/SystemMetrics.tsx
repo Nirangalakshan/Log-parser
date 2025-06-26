@@ -10,7 +10,7 @@
 //     const context = l2MainContext && l2MainContext.find(c => c.timestamp === item.timestamp);
 //     return {
 //       ...item,
-//       transactionId: context ? context.transactionId : "N/A", // Use transactionId from l2MainContext
+//       transactionId: context ? (context.transactionId || "N/A").toString() : "N/A",
 //       power: item.currentEnergy ? item.currentEnergy * 0.5 : 0, // Placeholder: adjust logic
 //     };
 //   });
@@ -18,10 +18,12 @@
 //   // Sort by transactionId initially
 //   const [sortDirection, setSortDirection] = useState("asc");
 //   const sortedData = [...enrichedData].sort((a, b) => {
+//     const aId = (a.transactionId || "N/A").toString();
+//     const bId = (b.transactionId || "N/A").toString();
 //     if (sortDirection === "asc") {
-//       return (a.transactionId || "").localeCompare(b.transactionId || "");
+//       return aId.localeCompare(bId);
 //     }
-//     return (b.transactionId || "").localeCompare(a.transactionId || "");
+//     return bId.localeCompare(aId);
 //   });
 
 //   // Toggle sort direction
@@ -173,6 +175,9 @@
 
 
 
+
+
+
 "use client";
 
 import { TrendingUp } from "lucide-react";
@@ -180,13 +185,16 @@ import { useState } from "react";
 import { RadialBarChart, RadialBar, PolarRadiusAxis, Label } from "recharts";
 
 export default function SystemMetrics({ l2Data, l2MainContext }) {
-  // Derive power and join with l2MainContext for transactionId
+  // Derive power and join with l2MainContext for transactionId and l2Data for state
   const enrichedData = (l2Data || []).map(item => {
     const context = l2MainContext && l2MainContext.find(c => c.timestamp === item.timestamp);
+    const state = item.state || "N/A";
+    console.log("Timestamp:", item.timestamp, "Context:", context, "State:", state, "State type:", typeof state);
     return {
       ...item,
       transactionId: context ? (context.transactionId || "N/A").toString() : "N/A",
       power: item.currentEnergy ? item.currentEnergy * 0.5 : 0, // Placeholder: adjust logic
+      state: state, // Use state from l2Data
     };
   });
 
@@ -223,6 +231,7 @@ export default function SystemMetrics({ l2Data, l2MainContext }) {
                 <th className="py-2 px-4 border-b text-left cursor-pointer" onClick={handleSort}>
                   Transaction ID {sortDirection === "asc" ? "↑" : "↓"}
                 </th>
+                <th className="py-2 px-4 border-b text-left">State</th>
                 <th className="py-2 px-4 border-b text-left">Consumed Energy (kWh)</th>
                 <th className="py-2 px-4 border-b text-left">Power (kW)</th>
               </tr>
@@ -232,6 +241,7 @@ export default function SystemMetrics({ l2Data, l2MainContext }) {
                 <tr key={index} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="py-2 px-4 border-b">{item.timestamp || "N/A"}</td>
                   <td className="py-2 px-4 border-b">{item.transactionId}</td>
+                  <td className="py-2 px-4 border-b">{item.state}</td>
                   <td className="py-2 px-4 border-b">{item.currentEnergy?.toFixed(2) || "0.00"}</td>
                   <td className="py-2 px-4 border-b">{item.power?.toFixed(2) || "0.00"}</td>
                 </tr>

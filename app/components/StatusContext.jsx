@@ -331,7 +331,7 @@ function StatusContext({ l2MainState = [], l2MainContext = [] }) {
         transition={{ duration: 0.5 }}
         className="space-y-4 max-h-[400px] overflow-y-auto"
       >
-        {l2MainState.map((state, index) => (
+        {/* {l2MainState.map((state, index) => (
           <motion.div
             key={index}
             className="flex justify-between items-center"
@@ -345,7 +345,7 @@ function StatusContext({ l2MainState = [], l2MainContext = [] }) {
               <StatusBadge status={state.meterValues} />
             </div>
           </motion.div>
-        ))}
+        ))} */}
       </motion.div>
 
       {/* Filters & Sorting Controls */}
