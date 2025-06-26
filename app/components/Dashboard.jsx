@@ -16,10 +16,10 @@ import DarkModeToggle from "./DarkModeToggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const SystemMetrics = dynamic(() => import("./SystemMetrics"), { ssr: false });
-const ChargingMetrics = dynamic(() => import("./ChargingMetrics"), { ssr: false });
+const ChargingMetrics = dynamic(() => import("./CharginMetrics"), { ssr: false });
 const StatusContext = dynamic(() => import("./StatusContext"), { ssr: false });
 const AdditionalInsights = dynamic(() => import("./AdditionalInsights"), { ssr: false });
-const StateTimeline = dynamic(() => import("./StateTimeline"), { ssr: false });
+
 
 // Define BATCH_SIZE at the component level
 const BATCH_SIZE = 200;
@@ -464,7 +464,7 @@ export default function Dashboard() {
           <TabsTrigger value="charging">Charging</TabsTrigger>
           <TabsTrigger value="context">Status</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
-          <TabsTrigger value="timeline">State Timeline</TabsTrigger>
+        
         </TabsList>
 
         <TabsContent value="metrics">
@@ -481,11 +481,6 @@ export default function Dashboard() {
         </TabsContent>
         <TabsContent value="insights">
           <AdditionalInsights l2Data={filteredData.l2Data} metricsData={filteredData.metricsData} />
-        </TabsContent>
-        <TabsContent value="timeline">
-          <StateTimeline logData={data.l2MainState.map(item => 
-            `${item.timestamp} INFO: L2Main State: ${JSON.stringify({Heartbeat: item.Heartbeat})} | L2Child State: ${JSON.stringify({[Object.keys(item)[1]]: item[Object.keys(item)[1]]})}`
-          )} />
         </TabsContent>
       </Tabs>
     </div>
