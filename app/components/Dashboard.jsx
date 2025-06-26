@@ -16,13 +16,10 @@ import DarkModeToggle from "./DarkModeToggle";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const SystemMetrics = dynamic(() => import("./SystemMetrics"), { ssr: false });
-const ChargingMetrics = dynamic(() => import("./CharginMetrics"), {
-  ssr: false,
-});
+const ChargingMetrics = dynamic(() => import("./ChargingMetrics"), { ssr: false });
 const StatusContext = dynamic(() => import("./StatusContext"), { ssr: false });
-const AdditionalInsights = dynamic(() => import("./AdditionalInsights"), {
-  ssr: false,
-});
+const AdditionalInsights = dynamic(() => import("./AdditionalInsights"), { ssr: false });
+const StateTimeline = dynamic(() => import("./StateTimeline"), { ssr: false });
 
 // Define BATCH_SIZE at the component level
 const BATCH_SIZE = 200;
@@ -77,7 +74,7 @@ export default function Dashboard() {
           }
           if (key === "l2MainContext") {
             const allIds = new Set([...updated.l2MainContext.map((item) => item.transactionId)].filter(Boolean));
-            console.log("All transaction IDs after flush:", Array.from(allIds)); // Log all IDs
+            console.log("All transaction IDs after flush:", Array.from(allIds));
           }
         }
       });
@@ -89,6 +86,11 @@ export default function Dashboard() {
     return () => {
       if (workerRef.current) workerRef.current.terminate();
       if (abortControllerRef.current) abortControllerRef.current.abort();
+      bufferedResults.current = {
+        l2Data: [], metricsData: [], l2MainState: [],
+        l2ChildState: [], l2MainContext: [], l2ChildContext: [],
+        memoryUsage: [], errors: [],
+      };
     };
   }, []);
 
@@ -126,7 +128,7 @@ export default function Dashboard() {
     setSelectedTransactionId("");
 
     try {
-      console.log("Starting file parse for:", file.name); // Log file start
+      console.log("Starting file parse for:", file.name);
       const workerCode = `
         const regexes = {
           l2Data: /^(.+?) info: L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
@@ -139,13 +141,13 @@ export default function Dashboard() {
           error: /^(.+?) info: error: (.*)/i
         };
 
-        let allTransactionIds = new Set(); // Global Set for all IDs
+        let allTransactionIds = new Set();
 
         self.onmessage = function(e) {
-          console.log("Worker received lines:", e.data.lines.length); // Log worker input
+          console.log("Worker received lines:", e.data.lines.length);
           const lines = e.data.lines;
           const startLineNumber = e.data.startLineNumber;
-          const batchSize = ${BATCH_SIZE}; // Use the constant directly
+          const batchSize = ${BATCH_SIZE};
           const results = {
             l2Data: [], metricsData: [], l2MainState: [],
             l2ChildState: [], l2MainContext: [], l2ChildContext: [],
@@ -161,7 +163,7 @@ export default function Dashboard() {
               const match = regex.exec(line);
               if (match) {
                 try {
-                  let jsonData = JSON.parse(match[2].trim().replace(/'/g, '"')); // Handle single quotes
+                  let jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
                   if (key === "l2Data") {
                     results.l2Data.push({
                       timestamp: match[1],
@@ -174,13 +176,13 @@ export default function Dashboard() {
                       ...jsonData
                     });
                   } else if (key === "l2MainContext" && jsonData.transactionId) {
-                    allTransactionIds.add(jsonData.transactionId); // Add to global Set
+                    allTransactionIds.add(jsonData.transactionId);
                     results.l2MainContext.push({
                       timestamp: match[1],
                       ...jsonData
                     });
                   } else if (key === "error") {
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                    const context = results.l2MainContext.find(function(c) { return c.timestamp === match[1]; });
                     results.errors.push({
                       timestamp: match[1],
                       message: match[2],
@@ -193,6 +195,7 @@ export default function Dashboard() {
                       ...jsonData
                     });
                   }
+                  console.log("Parsed " + key + " at line " + lineNumber + ":", { timestamp: match[1], data: jsonData });
                 } catch (err) {
                   results.errors.push({
                     timestamp: match ? match[1] : "Line " + lineNumber,
@@ -206,10 +209,9 @@ export default function Dashboard() {
             }
           }
 
-          console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds)); // Log IDs
-          self.postMessage({ type: 'batch', results, processed: lines.length });
+          console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds));
+          self.postMessage({ type: 'batch', results: results, processed: lines.length });
 
-          // Send all IDs at the end if this is the last batch
           if (e.data.lines.length < batchSize) {
             console.log("Final transaction IDs:", Array.from(allTransactionIds));
             self.postMessage({ type: 'final', transactionIds: Array.from(allTransactionIds) });
@@ -219,7 +221,7 @@ export default function Dashboard() {
 
       const blob = new Blob([workerCode], { type: "application/javascript" });
       workerRef.current = new Worker(URL.createObjectURL(blob));
-      console.log("Worker initialized:", workerRef.current); // Log worker creation
+      console.log("Worker initialized:", workerRef.current);
 
       const CHUNK_SIZE = 1024 * 512;
       let offset = 0;
@@ -237,20 +239,20 @@ export default function Dashboard() {
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
         const chunkText = await chunk.text();
         fileText += chunkText;
-        console.log(`Read chunk at offset ${offset}, size: ${chunkText.length}`); // Log chunk reading
+        console.log(`Read chunk at offset ${offset}, size: ${chunkText.length}`);
 
         offset += CHUNK_SIZE;
         setProgress({
           processed: offset,
           total: fileSize,
-          percentage: Math.floor((offset / fileSize) * 20),
+          percentage: Math.min(100, Math.floor((offset / fileSize) * 20)),
         });
         await new Promise((res) => setTimeout(res, 1));
       }
 
       setCurrentStage("Processing lines...");
       const allLines = fileText.split(/\r?\n/);
-      console.log("Total lines to process:", allLines.length); // Log total lines
+      console.log("Total lines to process:", allLines.length);
       const totalLines = allLines.length;
       setProgress({ processed: 0, total: totalLines, percentage: 20 });
 
@@ -258,7 +260,7 @@ export default function Dashboard() {
 
       workerRef.current.onmessage = (e) => {
         const { type, results, processed, transactionIds } = e.data;
-        console.log(`Received message type: ${type}, processed: ${processed}`); // Log message receipt
+        console.log(`Received message type: ${type}, processed: ${processed}, results:`, results);
         if (type === "batch") {
           console.log("Worker results:", results);
           Object.entries(results).forEach(([key, arr]) => {
@@ -273,7 +275,7 @@ export default function Dashboard() {
             return {
               processed: newProcessed,
               total: totalLines,
-              percentage: 20 + Math.floor((newProcessed / totalLines) * 80),
+              percentage: Math.min(100, 20 + Math.floor((newProcessed / totalLines) * 80)),
             };
           });
 
@@ -287,8 +289,9 @@ export default function Dashboard() {
           }
         } else if (type === "final") {
           console.log("Received final transaction IDs:", transactionIds);
-          setTransactionIds((prev) => [...new Set([...prev, ...transactionIds])]); // Accumulate all unique IDs
+          setTransactionIds((prev) => [...new Set([...prev, ...transactionIds])]);
           flushBuffer();
+          console.log("Final data.l2Data:", data.l2Data); // Debug log for l2Data
           setIsLoading(false);
           setCurrentStage("Parsing complete!");
           workerRef.current.terminate();
@@ -299,9 +302,9 @@ export default function Dashboard() {
       const firstBatch = allLines.slice(0, BATCH_SIZE);
       currentIndex = BATCH_SIZE;
       workerRef.current.postMessage({ lines: firstBatch, startLineNumber: 1 });
-      console.log("Sent first batch, size:", firstBatch.length); // Log first batch
+      console.log("Sent first batch, size:", firstBatch.length);
     } catch (err) {
-      console.error("Error during parsing:", err); // Log any errors
+      console.error("Error during parsing:", err);
       setIsLoading(false);
       setCurrentStage("Error during parsing");
       setData((prev) => ({ ...prev, errors: [...prev.errors, err.message] }));
@@ -354,14 +357,16 @@ export default function Dashboard() {
   }, [data]);
 
   const filteredData = useMemo(() => {
-    if (!selectedTransactionId) return { l2Data: [], metricsData: [], errors: [] };
+    if (!selectedTransactionId) return { l2Data: data.l2Data, metricsData: data.metricsData, errors: data.errors };
     return {
       l2Data: data.l2Data.filter((item) => {
-        const context = data.l2MainContext.find((c) => c.timestamp === item.timestamp);
+        const context = data.l2MainContext.find((c) => c.timestamp === item.timestamp) ||
+                        data.l2MainContext.find((c) => Math.abs(new Date(c.timestamp) - new Date(item.timestamp)) < 1000);
         return context && context.transactionId === selectedTransactionId;
       }),
       metricsData: data.metricsData.filter((item) => {
-        const context = data.l2MainContext.find((c) => c.timestamp === item.timestamp);
+        const context = data.l2MainContext.find((c) => c.timestamp === item.timestamp) ||
+                        data.l2MainContext.find((c) => Math.abs(new Date(c.timestamp) - new Date(item.timestamp)) < 1000);
         return context && context.transactionId === selectedTransactionId;
       }),
       errors: data.errors.filter((error) => error.transactionId === selectedTransactionId),
@@ -459,10 +464,11 @@ export default function Dashboard() {
           <TabsTrigger value="charging">Charging</TabsTrigger>
           <TabsTrigger value="context">Status</TabsTrigger>
           <TabsTrigger value="insights">Insights</TabsTrigger>
+          <TabsTrigger value="timeline">State Timeline</TabsTrigger>
         </TabsList>
 
         <TabsContent value="metrics">
-          <SystemMetrics metricsData={filteredData.metricsData} />
+          <SystemMetrics l2Data={filteredData.l2Data} />
         </TabsContent>
         <TabsContent value="charging">
           <ChargingMetrics l2Data={filteredData.l2Data} />
@@ -475,6 +481,11 @@ export default function Dashboard() {
         </TabsContent>
         <TabsContent value="insights">
           <AdditionalInsights l2Data={filteredData.l2Data} metricsData={filteredData.metricsData} />
+        </TabsContent>
+        <TabsContent value="timeline">
+          <StateTimeline logData={data.l2MainState.map(item => 
+            `${item.timestamp} INFO: L2Main State: ${JSON.stringify({Heartbeat: item.Heartbeat})} | L2Child State: ${JSON.stringify({[Object.keys(item)[1]]: item[Object.keys(item)[1]]})}`
+          )} />
         </TabsContent>
       </Tabs>
     </div>
