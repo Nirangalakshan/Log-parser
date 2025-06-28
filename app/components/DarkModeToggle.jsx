@@ -26,7 +26,7 @@ function DarkModeToggle() {
       whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.95 }}
       onClick={toggleDarkMode}
-      className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white shadow-sm border border-gray-300 dark:border-gray-600"
+      className={`p-2 rounded-full ${isDark ? 'bg-gray-800' : 'bg-gray-200'} text-gray-800 dark:text-white shadow-sm border border-gray-300 dark:border-gray-600`}
       aria-label="Toggle dark mode"
     >
       {isDark ? (
@@ -41,5 +41,4 @@ function DarkModeToggle() {
     </motion.button>
   );
 }
-
 export default DarkModeToggle;

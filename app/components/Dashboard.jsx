@@ -1,4 +1,3 @@
-
 // "use client";
 
 // import React, {
@@ -14,13 +13,7 @@
 // import { Input } from "@/components/ui/input";
 // import { Card, CardContent } from "@/components/ui/card";
 // import DarkModeToggle from "./DarkModeToggle";
-// import {
-//   Select,
-//   SelectContent,
-//   SelectItem,
-//   SelectTrigger,
-//   SelectValue,
-// } from "@/components/ui/select";
+// import StateTable from "./StateTable";
 
 // const SystemMetrics = dynamic(() => import("./SystemMetrics"), { ssr: false });
 // const ChargingMetrics = dynamic(() => import("./CharginMetrics"), {
@@ -31,7 +24,6 @@
 //   ssr: false,
 // });
 
-// // Define BATCH_SIZE at the component level
 // const BATCH_SIZE = 200;
 
 // export default function Dashboard() {
@@ -39,7 +31,7 @@
 //     l2Data: [],
 //     metricsData: [],
 //     l2MainState: [],
-//     l2ChildState: [],
+//     l2ChildState: [], // Keeping this for potential future use, but we'll populate l2MainState with both
 //     l2MainContext: [],
 //     l2ChildContext: [],
 //     memoryUsage: [],
@@ -79,6 +71,9 @@
 //           updated[key] = [...prev[key], ...bufferedResults.current[key]];
 //           bufferedResults.current[key] = [];
 //           hasUpdates = true;
+//           if (key === "l2MainState") {
+//             console.log("Flushed l2MainState:", updated.l2MainState);
+//           }
 //           if (key === "metricsData") {
 //             console.log(
 //               "Updated metricsData length:",
@@ -151,17 +146,15 @@
 
 //     try {
 //       console.log("Starting file parse for:", file.name);
-//       // Inside parseFile function, update workerCode
 //       const workerCode = `
 //   const regexes = {
-//     l2Data: /^(.+?) info: L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
-//     metricsData: /^(.+?) info: MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
-//     l2MainState: /^(.+?) info: L2Main State: ({.*?})/i,
-//     l2ChildState: /^(.+?) info: L2Child State: ({.*?})/i,
-//     l2MainContext: /^(.+?) info: L2Main Context: ({.*?transactionId.*?})/i,
-//     l2ChildContext: /^(.+?) info: L2Child Context: ({.*?})/i,
-//     memory: /^(.+?) info: Memory: ({.*?})/i,
-//     error: /^(.+?) info: error: (.*)/i
+//     l2Data: /^(.+?)\\s*info:\\s*L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
+//     metricsData: /^(.+?)\\s*info:\\s*MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
+//     l2MainState: /(.+?)\\s*info:\\s*L2Main\\s*State\\s*[:\\s]*({.*?})(?:\\s*\\|\\s*L2child\\s+State:\\s*({.*?}))?/i,
+//     l2MainContext: /^(.+?)\\s*info:\\s*L2Main\\s*Context:\\s*({.*?transactionId.*?})/i,
+//     l2ChildContext: /^(.+?)\\s*info:\\s*L2Child\\s*Context:\\s*({.*?})/i,
+//     memory: /^(.+?)\\s*info:\\s*Memory:\\s*({.*?})/i,
+//     error: /^(.+?)\\s*info:\\s*error:\\s*(.*)/i
 //   };
 
 //   let allTransactionIds = new Set();
@@ -172,9 +165,8 @@
 //     const startLineNumber = e.data.startLineNumber;
 //     const batchSize = ${BATCH_SIZE};
 //     const results = {
-//       l2Data: [], metricsData: [], l2MainState: [],
-//       l2ChildState: [], l2MainContext: [], l2ChildContext: [],
-//       memoryUsage: [], errors: [],
+//       l2Data: [], metricsData: [], l2MainState: [], l2ChildState: [],
+//       l2MainContext: [], l2ChildContext: [], memoryUsage: [], errors: [],
 //     };
 
 //     for(let i = 0; i < lines.length; i++) {
@@ -186,20 +178,22 @@
 //         const match = regex.exec(line);
 //         if (match) {
 //           try {
-//             let jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+//             let jsonData = {};
 //             if (key === "l2Data") {
+//               jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
 //               results.l2Data.push({
 //                 timestamp: match[1],
 //                 currentEnergy: parseFloat(match[3]),
 //                 ...jsonData
 //               });
 //             } else if (key === "metricsData") {
+//               jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
 //               results.metricsData.push({
 //                 timestamp: match[1],
 //                 ...jsonData
 //               });
 //             } else if (key === "l2MainContext") {
-//               // Handle nested transactionId if present
+//               jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
 //               const transactionId = typeof jsonData.transactionId === "object" && jsonData.transactionId !== null
 //                 ? jsonData.transactionId.id || jsonData.transactionId.toString()
 //                 : jsonData.transactionId;
@@ -211,6 +205,19 @@
 //                   ...jsonData
 //                 });
 //               }
+//             } else if (key === "l2MainState") {
+//               const timestamp = match[1];
+//               const mainStateJson = match[2] ? JSON.parse(match[2].trim().replace(/'/g, '"')) : {};
+//               const childStateJson = match[3] ? JSON.parse(match[3].trim().replace(/'/g, '"')) : {};
+//               const combinedState = {
+//                 timestamp: timestamp,
+//                 ...mainStateJson,
+//                 ...childStateJson
+//               };
+//               if (Object.keys(combinedState).length > 1) { // Ensure at least one state field exists
+//                 results.l2MainState.push(combinedState);
+//               }
+//               console.log("Matched l2MainState at line " + lineNumber + ":", { timestamp: match[1], rawLine: line, matchGroups: match, parsedData: combinedState });
 //             } else if (key === "error") {
 //               const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
 //               results.errors.push({
@@ -220,19 +227,19 @@
 //               });
 //             } else {
 //               const outKey = key === "memory" ? "memoryUsage" : key;
+//               jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
 //               results[outKey].push({
 //                 timestamp: match[1],
 //                 ...jsonData
 //               });
 //             }
-//             console.log("Parsed " + key + " at line " + lineNumber + ":", { timestamp: match[1], data: jsonData });
 //           } catch (err) {
 //             results.errors.push({
 //               timestamp: match ? match[1] : "Line " + lineNumber,
 //               message: err.message + ' - Raw: ' + line,
 //               transactionId: null
 //             });
-//             console.log("Parsing error on line:", line, "Error:", err);
+//             console.log("Parsing error on line:", lineNumber, "Error:", err, "Raw line:", line);
 //           }
 //           break;
 //         }
@@ -340,8 +347,14 @@
 //           console.log(
 //             "Final data lengths - l2Data:",
 //             data.l2Data.length,
+//             "l2MainState:",
+//             data.l2MainState.length,
+//             "l2ChildState:",
+//             data.l2ChildState.length,
 //             "l2MainContext:",
-//             data.l2MainContext.length
+//             data.l2MainContext.length,
+//             "errors:",
+//             data.errors.length,
 //           );
 //           setIsLoading(false);
 //           setCurrentStage("Parsing complete!");
@@ -412,7 +425,6 @@
 //     if (!selectedTransactionId)
 //       return { l2Data: [], metricsData: [], errors: [] };
 
-//     // Create a map of transactionIds by timestamp for efficient lookup
 //     const contextMap = new Map();
 //     data.l2MainContext.forEach((item) => {
 //       if (item.timestamp && item.transactionId) {
@@ -504,25 +516,21 @@
 //           )}
 
 //           {transactionIds.length > 0 && (
-//             <div className="flex gap-2 items-center">
-//               <span className="text-sm text-gray-600">
-//                 Select Transaction ID:
-//               </span>
-//               <Select
-//                 onValueChange={setSelectedTransactionId}
-//                 value={selectedTransactionId}
-//               >
-//                 <SelectTrigger className="w-[180px]">
-//                   <SelectValue placeholder="Select a transaction ID" />
-//                 </SelectTrigger>
-//                 <SelectContent>
-//                   {transactionIds.map((id) => (
-//                     <SelectItem key={id} value={id}>
-//                       {id}
-//                     </SelectItem>
-//                   ))}
-//                 </SelectContent>
-//               </Select>
+//             <div className="flex gap-2 items-center flex-wrap">
+//               <span className="text-sm text-gray-600">Transaction IDs:</span>
+//               {transactionIds.map((id) => (
+//                 <span
+//                   key={id}
+//                   className={`text-sm px-2 py-1 rounded cursor-pointer ${
+//                     selectedTransactionId === id
+//                       ? "bg-blue-500 text-white dark:bg-blue-700"
+//                       : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+//                   }`}
+//                   onClick={() => setSelectedTransactionId(id)}
+//                 >
+//                   {id}
+//                 </span>
+//               ))}
 //             </div>
 //           )}
 
@@ -553,6 +561,7 @@
 //           <TabsTrigger value="charging">Charging</TabsTrigger>
 //           <TabsTrigger value="context">Status</TabsTrigger>
 //           <TabsTrigger value="insights">Insights</TabsTrigger>
+//           <TabsTrigger value="states">States</TabsTrigger>
 //         </TabsList>
 
 //         <TabsContent value="metrics">
@@ -609,13 +618,22 @@
 //             </div>
 //           )}
 //         </TabsContent>
+//         <TabsContent value="states">
+//           <div className="space-y-6">
+//             <h2 className="text-xl font-semibold">L2 Main and Child State</h2>
+//             {data.l2MainState.length > 0 ? (
+//               <StateTable stateData={data.l2MainState} />
+//             ) : (
+//               <div className="text-center text-gray-500 p-4">
+//                 No state data available.
+//               </div>
+//             )}
+//           </div>
+//         </TabsContent>
 //       </Tabs>
 //     </div>
 //   );
 // }
-
-
-
 
 
 
@@ -637,15 +655,17 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import DarkModeToggle from "./DarkModeToggle";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import StateTable from "./StateTable";
 
 const SystemMetrics = dynamic(() => import("./SystemMetrics"), { ssr: false });
-const ChargingMetrics = dynamic(() => import("./CharginMetrics"), { ssr: false });
+const ChargingMetrics = dynamic(() => import("./CharginMetrics"), {
+  ssr: false,
+});
 const StatusContext = dynamic(() => import("./StatusContext"), { ssr: false });
-const AdditionalInsights = dynamic(() => import("./AdditionalInsights"), { ssr: false });
-const StateTable = dynamic(() => import("./StateTable"), { ssr: false });
+const AdditionalInsights = dynamic(() => import("./AdditionalInsights"), {
+  ssr: false,
+});
 
-// Define BATCH_SIZE at the component level
 const BATCH_SIZE = 200;
 
 export default function Dashboard() {
@@ -653,7 +673,7 @@ export default function Dashboard() {
     l2Data: [],
     metricsData: [],
     l2MainState: [],
-    l2ChildState: [],
+    l2ChildState: [], // Keeping this for potential future use
     l2MainContext: [],
     l2ChildContext: [],
     memoryUsage: [],
@@ -693,14 +713,21 @@ export default function Dashboard() {
           updated[key] = [...prev[key], ...bufferedResults.current[key]];
           bufferedResults.current[key] = [];
           hasUpdates = true;
-          if (key === "l2Data") {
-            console.log("Flushed l2Data length:", updated.l2Data.length, "Sample:", updated.l2Data.slice(0, 2));
+          if (key === "l2MainState") {
+            console.log("Flushed l2MainState:", updated.l2MainState);
           }
           if (key === "metricsData") {
-            console.log("Updated metricsData length:", updated.metricsData.length);
+            console.log(
+              "Updated metricsData length:",
+              updated.metricsData.length
+            );
           }
           if (key === "l2MainContext") {
-            const allIds = new Set([...updated.l2MainContext.map((item) => item.transactionId)].filter(Boolean));
+            const allIds = new Set(
+              [
+                ...updated.l2MainContext.map((item) => item.transactionId),
+              ].filter(Boolean)
+            );
             console.log("All transaction IDs after flush:", Array.from(allIds));
           }
         }
@@ -714,9 +741,14 @@ export default function Dashboard() {
       if (workerRef.current) workerRef.current.terminate();
       if (abortControllerRef.current) abortControllerRef.current.abort();
       bufferedResults.current = {
-        l2Data: [], metricsData: [], l2MainState: [],
-        l2ChildState: [], l2MainContext: [], l2ChildContext: [],
-        memoryUsage: [], errors: [],
+        l2Data: [],
+        metricsData: [],
+        l2MainState: [],
+        l2ChildState: [],
+        l2MainContext: [],
+        l2ChildContext: [],
+        memoryUsage: [],
+        errors: [],
       };
     };
   }, []);
@@ -756,135 +788,119 @@ export default function Dashboard() {
 
     try {
       console.log("Starting file parse for:", file.name);
-      const workerCode = `
-        const regexes = {
-          l2Data: /^(.+?) INFO: L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)(?:\\s*\\|\\s*L2Child State: ({.*?})\\s*\\||$)/i,
-          metricsData: /^(.+?) info: MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
-          l2MainState: /^(.+?) INFO: L2Main State\\s*({.*?})(?:\\s*\\|\\s*L2Child State: ({.*?})\\s*\\||$)/i,
-          l2ChildState: /^(.+?) INFO: L2Main State\\s*({.*?})\\s*\\|\\s*L2Child State: ({.*?})\\s*\\|/i,
-          l2MainContext: /^(.+?) info: L2Main Context: ({.*?transactionId.*?})/i,
-          l2ChildContext: /^(.+?) info: L2Child Context: ({.*?})/i,
-          memory: /^(.+?) info: Memory: ({.*?})/i,
-          error: /^(.+?) info: error: (.*)/i
-        };
+     const workerCode = `
+  const regexes = {
+    l2Data: /^(.+?)\\s*info:\\s*L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
+    metricsData: /^(.+?)\\s*info:\\s*MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
+    l2MainState: /(.+?)\\s*info:\\s*L2Main\\s*State\\s*[:\\s]*({.*?})(?:\\s*\\|\\s*L2child\\s+State:\\s*({.*?}))?/i,
+    l2MainContext: /^(.+?)\\s*info:\\s*L2Main\\s*Context:\\s*({.*?transactionId.*?})/i,
+    l2ChildContext: /^(.+?)\\s*info:\\s*L2Child\\s*Context:\\s*({.*?})/i,
+    memory: /^(.+?)\\s*info:\\s*Memory:\\s*({.*?})/i,
+    error: /^(.+?)\\s*info:\\s*error:\\s*(.*)/i
+  };
 
-        let allTransactionIds = new Set();
+  let allTransactionIds = new Set();
 
-        self.onmessage = function(e) {
-          console.log("Worker received lines:", e.data.lines.length);
-          const lines = e.data.lines;
-          const startLineNumber = e.data.startLineNumber;
-          const batchSize = ${BATCH_SIZE};
-          const results = {
-            l2Data: [], metricsData: [], l2MainState: [],
-            l2ChildState: [], l2MainContext: [], l2ChildContext: [],
-            memoryUsage: [], errors: [],
-          };
+  self.onmessage = function(e) {
+    console.log("Worker received lines:", e.data.lines.length);
+    const lines = e.data.lines;
+    const startLineNumber = e.data.startLineNumber;
+    const batchSize = ${BATCH_SIZE};
+    const results = {
+      l2Data: [], metricsData: [], l2MainState: [], l2ChildState: [],
+      l2MainContext: [], l2ChildContext: [], memoryUsage: [], errors: [],
+    };
 
-          for(let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lineNumber = startLineNumber + i;
-            if (!line || !line.trim()) continue;
+    for(let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNumber = startLineNumber + i;
+      if (!line || !line.trim()) continue;
 
-            for (const [key, regex] of Object.entries(regexes)) {
-              const match = regex.exec(line);
-              if (match) {
-                try {
-                  let jsonData = {};
-                  if (key === "l2Data") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const childStateJson = match[4] ? JSON.parse(match[4].trim().replace(/'/g, '"')) : {};
-                    const state = childStateJson.C1 || "N/A";
-                    console.log("Parsed l2Data at line", lineNumber, ": raw line", line, "timestamp", match[1], "state", state, "type", typeof state);
-                    results.l2Data.push({
-                      timestamp: match[1],
-                      currentEnergy: parseFloat(match[3]),
-                      state: state,
-                      ...jsonData
-                    });
-                  } else if (key === "metricsData") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    results.metricsData.push({
-                      timestamp: match[1],
-                      ...jsonData
-                    });
-                  } else if (key === "l2MainContext") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const transactionId = typeof jsonData.transactionId === "object" && jsonData.transactionId !== null
-                      ? jsonData.transactionId.id || jsonData.transactionId.toString()
-                      : jsonData.transactionId;
-                    if (transactionId) {
-                      allTransactionIds.add(transactionId);
-                      results.l2MainContext.push({
-                        timestamp: match[1],
-                        transactionId: transactionId,
-                        ...jsonData
-                      });
-                    }
-                  } else if (key === "l2MainState") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    results.l2MainState.push({
-                      timestamp: match[1],
-                      ...jsonData
-                    });
-                    if (match[3]) { // If L2Child State is present in the same line
-                      const childJson = JSON.parse(match[3].trim().replace(/'/g, '"'));
-                      const state = childJson.C1 || "N/A";
-                      console.log("Parsed l2ChildState at line", lineNumber, ": raw line", line, "timestamp", match[1], "state", state, "type", typeof state);
-                      results.l2ChildState.push({
-                        timestamp: match[1],
-                        state: state,
-                        ...childJson
-                      });
-                    }
-                  } else if (key === "l2ChildState") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"')); // Main state (not used)
-                    const childJson = JSON.parse(match[3].trim().replace(/'/g, '"'));
-                    const state = childJson.C1 || "N/A";
-                    console.log("Parsed l2ChildState at line", lineNumber, ": raw line", line, "timestamp", match[1], "state", state, "type", typeof state);
-                    results.l2ChildState.push({
-                      timestamp: match[1],
-                      state: state,
-                      ...childJson
-                    });
-                  } else if (key === "error") {
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    results.errors.push({
-                      timestamp: match[1],
-                      message: match[2],
-                      transactionId: context ? context.transactionId : null
-                    });
-                  } else {
-                    const outKey = key === "memory" ? "memoryUsage" : key;
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    results[outKey].push({
-                      timestamp: match[1],
-                      ...jsonData
-                    });
-                  }
-                  console.log("Parsed " + key + " at line " + lineNumber + ":", { timestamp: match[1], data: jsonData });
-                } catch (err) {
-                  results.errors.push({
-                    timestamp: match ? match[1] : "Line " + lineNumber,
-                    message: err.message + ' - Raw: ' + line,
-                    transactionId: null
-                  });
-                  console.log("Parsing error on line:", line, "Error:", err);
-                }
-                break;
+      for (const [key, regex] of Object.entries(regexes)) {
+        const match = regex.exec(line);
+        if (match) {
+          try {
+            let jsonData = {};
+            if (key === "l2Data") {
+              jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+              results.l2Data.push({
+                timestamp: match[1],
+                currentEnergy: parseFloat(match[3]),
+                ...jsonData
+              });
+            } else if (key === "metricsData") {
+              jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+              results.metricsData.push({
+                timestamp: match[1],
+                ...jsonData
+              });
+            } else if (key === "l2MainContext") {
+              jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+              const transactionId = typeof jsonData.transactionId === "object" && jsonData.transactionId !== null
+                ? jsonData.transactionId.id || jsonData.transactionId.toString()
+                : jsonData.transactionId;
+              if (transactionId) {
+                allTransactionIds.add(transactionId);
+                results.l2MainContext.push({
+                  timestamp: match[1],
+                  transactionId: transactionId,
+                  ...jsonData
+                });
               }
+            } else if (key === "l2MainState") {
+              const timestamp = match[1];
+              const mainStateJson = match[2] ? JSON.parse(match[2].trim().replace(/'/g, '"')) : {};
+              const childStateJson = match[3] ? JSON.parse(match[3].trim().replace(/'/g, '"')) : {};
+              const combinedState = {
+                timestamp: timestamp,
+                ...mainStateJson
+              };
+              // Include the entire ChildState JSON, which should have only one key
+              if (Object.keys(childStateJson).length === 1) {
+                const [childKey] = Object.keys(childStateJson);
+                combinedState[childKey] = childStateJson[childKey];
+              }
+              if (Object.keys(combinedState).length > 1) { // Ensure at least one state field exists
+                results.l2MainState.push(combinedState);
+              }
+              console.log("Matched l2MainState at line " + lineNumber + ":", { timestamp: match[1], rawLine: line, matchGroups: match, parsedData: combinedState });
+            } else if (key === "error") {
+              const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+              results.errors.push({
+                timestamp: match[1],
+                message: match[2],
+                transactionId: context ? context.transactionId : null
+              });
+            } else {
+              const outKey = key === "memory" ? "memoryUsage" : key;
+              jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+              results[outKey].push({
+                timestamp: match[1],
+                ...jsonData
+              });
             }
+          } catch (err) {
+            results.errors.push({
+              timestamp: match ? match[1] : "Line " + lineNumber,
+              message: err.message + ' - Raw: ' + line,
+              transactionId: null
+            });
+            console.log("Parsing error on line:", lineNumber, "Error:", err, "Raw line:", line);
           }
+          break;
+        }
+      }
+    }
 
-          console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds));
-          self.postMessage({ type: 'batch', results: results, processed: lines.length });
+    console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds));
+    self.postMessage({ type: 'batch', results: results, processed: lines.length });
 
-          if (e.data.lines.length < batchSize) {
-            console.log("Final transaction IDs:", Array.from(allTransactionIds));
-            self.postMessage({ type: 'final', transactionIds: Array.from(allTransactionIds) });
-          }
-        };
-      `;
+    if (e.data.lines.length < batchSize) {
+      console.log("Final transaction IDs:", Array.from(allTransactionIds));
+      self.postMessage({ type: 'final', transactionIds: Array.from(allTransactionIds) });
+    }
+  };
+`;
 
       const blob = new Blob([workerCode], { type: "application/javascript" });
       workerRef.current = new Worker(URL.createObjectURL(blob));
@@ -906,7 +922,9 @@ export default function Dashboard() {
         const chunk = file.slice(offset, offset + CHUNK_SIZE);
         const chunkText = await chunk.text();
         fileText += chunkText;
-        console.log(`Read chunk at offset ${offset}, size: ${chunkText.length}`);
+        console.log(
+          `Read chunk at offset ${offset}, size: ${chunkText.length}`
+        );
 
         offset += CHUNK_SIZE;
         setProgress({
@@ -927,7 +945,10 @@ export default function Dashboard() {
 
       workerRef.current.onmessage = (e) => {
         const { type, results, processed, transactionIds } = e.data;
-        console.log(`Received message type: ${type}, processed: ${processed}, results:`, results);
+        console.log(
+          `Received message type: ${type}, processed: ${processed}, results:`,
+          results
+        );
         if (type === "batch") {
           console.log("Worker results:", results);
           Object.entries(results).forEach(([key, arr]) => {
@@ -936,18 +957,27 @@ export default function Dashboard() {
 
           setProgress((prev) => {
             const newProcessed = prev.processed + processed;
-            if (newProcessed % 1000 < BATCH_SIZE || newProcessed >= totalLines) {
+            if (
+              newProcessed % 1000 < BATCH_SIZE ||
+              newProcessed >= totalLines
+            ) {
               flushBuffer();
             }
             return {
               processed: newProcessed,
               total: totalLines,
-              percentage: Math.min(100, 20 + Math.floor((newProcessed / totalLines) * 80)),
+              percentage: Math.min(
+                100,
+                20 + Math.floor((newProcessed / totalLines) * 80)
+              ),
             };
           });
 
           if (currentIndex < totalLines) {
-            const batchLines = allLines.slice(currentIndex, currentIndex + BATCH_SIZE);
+            const batchLines = allLines.slice(
+              currentIndex,
+              currentIndex + BATCH_SIZE
+            );
             workerRef.current.postMessage({
               lines: batchLines,
               startLineNumber: currentIndex + 1,
@@ -956,9 +986,22 @@ export default function Dashboard() {
           }
         } else if (type === "final") {
           console.log("Received final transaction IDs:", transactionIds);
-          setTransactionIds((prev) => [...new Set([...prev, ...transactionIds])]);
+          setTransactionIds((prev) => [
+            ...new Set([...prev, ...transactionIds]),
+          ]);
           flushBuffer();
-          console.log("Final data lengths - l2Data:", data.l2Data.length, "l2ChildState:", data.l2ChildState.length);
+          console.log(
+            "Final data lengths - l2Data:",
+            data.l2Data.length,
+            "l2MainState:",
+            data.l2MainState.length,
+            "l2ChildState:",
+            data.l2ChildState.length,
+            "l2MainContext:",
+            data.l2MainContext.length,
+            "errors:",
+            data.errors.length,
+          );
           setIsLoading(false);
           setCurrentStage("Parsing complete!");
           workerRef.current.terminate();
@@ -1025,17 +1068,18 @@ export default function Dashboard() {
 
   const filteredData = useMemo(() => {
     console.log("Filtering data for transactionId:", selectedTransactionId);
-    if (!selectedTransactionId) return { l2Data: [], metricsData: [], errors: [] };
-    
+    if (!selectedTransactionId)
+      return { l2Data: [], metricsData: [], errors: [] };
+
     const contextMap = new Map();
-    data.l2MainContext.forEach(item => {
+    data.l2MainContext.forEach((item) => {
       if (item.timestamp && item.transactionId) {
         contextMap.set(item.timestamp, item.transactionId);
       }
     });
 
     const filterByTransactionId = (items) => {
-      return items.filter(item => {
+      return items.filter((item) => {
         const contextId = contextMap.get(item.timestamp);
         return contextId === selectedTransactionId;
       });
@@ -1044,9 +1088,17 @@ export default function Dashboard() {
     return {
       l2Data: filterByTransactionId(data.l2Data),
       metricsData: filterByTransactionId(data.metricsData),
-      errors: data.errors.filter(error => error.transactionId === selectedTransactionId),
+      errors: data.errors.filter(
+        (error) => error.transactionId === selectedTransactionId
+      ),
     };
-  }, [selectedTransactionId, data.l2Data, data.metricsData, data.l2MainContext, data.errors]);
+  }, [
+    selectedTransactionId,
+    data.l2Data,
+    data.metricsData,
+    data.l2MainContext,
+    data.errors,
+  ]);
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
@@ -1066,11 +1118,12 @@ export default function Dashboard() {
               disabled={isLoading}
               className="flex-1"
             />
-            {!isLoading && (data.l2Data.length > 0 || data.errors.length > 0) && (
-              <Button variant="outline" onClick={clearData}>
-                Clear
-              </Button>
-            )}
+            {!isLoading &&
+              (data.l2Data.length > 0 || data.errors.length > 0) && (
+                <Button variant="outline" onClick={clearData}>
+                  Clear
+                </Button>
+              )}
             {isLoading && (
               <Button variant="destructive" onClick={cancelParsing}>
                 Cancel
@@ -1084,7 +1137,11 @@ export default function Dashboard() {
                 <span className="text-sm text-gray-600">
                   {currentStage}{" "}
                   {progress.processed > 0 && progress.total > 0 && (
-                    <> ({progress.processed.toLocaleString()} / {progress.total.toLocaleString()}) </>
+                    <>
+                      {" "}
+                      ({progress.processed.toLocaleString()} /{" "}
+                      {progress.total.toLocaleString()}){" "}
+                    </>
                   )}
                 </span>
               </div>
@@ -1099,34 +1156,45 @@ export default function Dashboard() {
 
           {!isLoading && data.l2Data.length > 0 && (
             <div className="text-sm text-green-600 bg-green-50 p-2 rounded">
-              ✅ Successfully parsed {totalRecords.toLocaleString()} total records
+              ✅ Successfully parsed {totalRecords.toLocaleString()} total
+              records
             </div>
           )}
 
           {transactionIds.length > 0 && (
-            <div className="flex gap-2 items-center">
-              <span className="text-sm text-gray-600">Select Transaction ID:</span>
-              <Select onValueChange={setSelectedTransactionId} value={selectedTransactionId}>
-                <SelectTrigger className="w-[180px]">
-                  <SelectValue placeholder="Select a transaction ID" />
-                </SelectTrigger>
-                <SelectContent>
-                  {transactionIds.map((id) => (
-                    <SelectItem key={id} value={id}>{id}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex gap-2 items-center flex-wrap">
+              <span className="text-sm text-gray-600">Transaction IDs:</span>
+              {transactionIds.map((id) => (
+                <span
+                  key={id}
+                  className={`text-sm px-2 py-1 rounded cursor-pointer ${
+                    selectedTransactionId === id
+                      ? "bg-blue-500 text-white dark:bg-blue-700"
+                      : "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600"
+                  }`}
+                  onClick={() => setSelectedTransactionId(id)}
+                >
+                  {id}
+                </span>
+              ))}
             </div>
           )}
 
           {filteredData.errors.length > 0 && (
             <div className="text-sm text-red-600 bg-red-50 p-2 rounded max-h-32 overflow-y-auto">
-              <div className="font-medium">Errors for Transaction {selectedTransactionId} ({filteredData.errors.length}):</div>
+              <div className="font-medium">
+                Errors for Transaction {selectedTransactionId} (
+                {filteredData.errors.length}):
+              </div>
               {filteredData.errors.slice(0, 5).map((error, i) => (
-                <div key={i} className="text-xs mt-1">{error.timestamp}: {error.message}</div>
+                <div key={i} className="text-xs mt-1">
+                  {error.timestamp}: {error.message}
+                </div>
               ))}
               {filteredData.errors.length > 5 && (
-                <div className="text-xs mt-1">... and {filteredData.errors.length - 5} more</div>
+                <div className="text-xs mt-1">
+                  ... and {filteredData.errors.length - 5} more
+                </div>
               )}
             </div>
           )}
@@ -1143,27 +1211,70 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="metrics">
-          {selectedTransactionId ? <SystemMetrics l2Data={filteredData.l2Data} l2MainContext={data.l2MainContext} /> : <div className="text-center text-gray-500 p-4">Please select a Transaction ID to view metrics.</div>}
+          {selectedTransactionId ? (
+            <SystemMetrics
+              l2Data={filteredData.l2Data}
+              l2MainContext={data.l2MainContext}
+            />
+          ) : (
+            <div className="text-center text-gray-500 p-4">
+              Please select a Transaction ID to view metrics.
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="charging">
-          {selectedTransactionId ? <ChargingMetrics l2Data={filteredData.l2Data} /> : <div className="text-center text-gray-500 p-4">Please select a Transaction ID to view charging data.</div>}
+          {selectedTransactionId ? (
+            <ChargingMetrics l2Data={filteredData.l2Data} />
+          ) : (
+            <div className="text-center text-gray-500 p-4">
+              Please select a Transaction ID to view charging data.
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="context">
           {selectedTransactionId ? (
             <StatusContext
-              l2MainState={data.l2MainState.filter(item => {
-                const context = data.l2MainContext.find(c => c.timestamp === item.timestamp);
-                return context && context.transactionId === selectedTransactionId;
+              l2MainState={data.l2MainState.filter((item) => {
+                const context = data.l2MainContext.find(
+                  (c) => c.timestamp === item.timestamp
+                );
+                return (
+                  context && context.transactionId === selectedTransactionId
+                );
               })}
-              l2MainContext={data.l2MainContext.filter(c => c.transactionId === selectedTransactionId)}
+              l2MainContext={data.l2MainContext.filter(
+                (c) => c.transactionId === selectedTransactionId
+              )}
             />
-          ) : <div className="text-center text-gray-500 p-4">Please select a Transaction ID to view status.</div>}
+          ) : (
+            <div className="text-center text-gray-500 p-4">
+              Please select a Transaction ID to view status.
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="insights">
-          {selectedTransactionId ? <AdditionalInsights l2Data={filteredData.l2Data} metricsData={filteredData.metricsData} /> : <div className="text-center text-gray-500 p-4">Please select a Transaction ID to view insights.</div>}
+          {selectedTransactionId ? (
+            <AdditionalInsights
+              l2Data={filteredData.l2Data}
+              metricsData={filteredData.metricsData}
+            />
+          ) : (
+            <div className="text-center text-gray-500 p-4">
+              Please select a Transaction ID to view insights.
+            </div>
+          )}
         </TabsContent>
         <TabsContent value="states">
-          {data.l2ChildState.length > 0 ? <StateTable l2ChildState={data.l2ChildState} /> : <div className="text-center text-gray-500 p-4">No state data available. Please load a file.</div>}
+          <div className="space-y-6">
+            <h2 className="text-xl font-semibold">Charging States</h2>
+            {data.l2MainState.length > 0 ? (
+              <StateTable stateData={data.l2MainState} />
+            ) : (
+              <div className="text-center text-gray-500 p-4">
+                No state data available.
+              </div>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
     </div>

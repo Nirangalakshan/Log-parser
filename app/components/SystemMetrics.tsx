@@ -333,14 +333,14 @@ export default function SystemMetrics({ l2Data, l2MainContext }) {
               <div className="mt-4 px-2 text-sm text-gray-700 dark:text-gray-300">
                 <table className="w-full text-left border-collapse">
                   <thead>
-                    <tr className="text-xs uppercase text-gray-500 dark:text-gray-400 border-b">
+                    <tr className="text-xs uppercase text-gray-500 dark:text-gray-400 border-b text-center">
                       <th className="pb-1">Min</th>
                       <th className="pb-1">Max</th>
                       <th className="pb-1">Avg</th>
                     </tr>
                   </thead>
                   <tbody>
-                    <tr className="text-sm">
+                    <tr className="text-sm text-center">
                       <td>{stats.min.toFixed(2)} {metric.unit}</td>
                       <td>{stats.max.toFixed(2)} {metric.unit}</td>
                       <td>{stats.avg.toFixed(2)} {metric.unit}</td>
