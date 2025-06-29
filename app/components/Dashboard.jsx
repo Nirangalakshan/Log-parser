@@ -635,11 +635,6 @@
 //   );
 // }
 
-
-
-
-
-
 "use client";
 
 import React, {
@@ -788,7 +783,7 @@ export default function Dashboard() {
 
     try {
       console.log("Starting file parse for:", file.name);
-     const workerCode = `
+      const workerCode = `
   const regexes = {
     l2Data: /^(.+?)\\s*info:\\s*L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
     metricsData: /^(.+?)\\s*info:\\s*MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
@@ -1000,7 +995,7 @@ export default function Dashboard() {
             "l2MainContext:",
             data.l2MainContext.length,
             "errors:",
-            data.errors.length,
+            data.errors.length
           );
           setIsLoading(false);
           setCurrentStage("Parsing complete!");
@@ -1018,6 +1013,113 @@ export default function Dashboard() {
       setIsLoading(false);
       setCurrentStage("Error during parsing");
       setData((prev) => ({ ...prev, errors: [...prev.errors, err.message] }));
+    }
+  };
+
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiResponse, setAiResponse] = useState("");
+  const [isFetchingAI, setIsFetchingAI] = useState(false);
+
+  // const askAIAboutLog = async () => {
+  //   if (!aiPrompt.trim()) return;
+
+  //   try {
+  //     setIsFetchingAI(true);
+  //     setAiResponse("");
+
+  //     const response = await fetch("http://localhost:3001/api/ask-llm", {
+  //       method: "POST",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({
+  //         prompt: aiPrompt,
+  //         logContent: data.l2Data?.length
+  //           ? JSON.stringify(data.l2Data.slice(0, 200))
+  //           : "",
+  //       }),
+  //     });
+
+  //     const result = await response.json();
+  //     if (result.response) {
+  //       setAiResponse(result.response);
+  //     } else {
+  //       setAiResponse("⚠️ AI didn't respond. Check server logs.");
+  //     }
+  //   } catch (err) {
+  //     setAiResponse("❌ Error contacting AI: " + err.message);
+  //   } finally {
+  //     setIsFetchingAI(false);
+  //   }
+  // };
+
+  const askAIAboutLog = async () => {
+    if (!aiPrompt.trim()) return;
+
+    try {
+      setIsFetchingAI(true);
+      setAiResponse("");
+
+      // Curate only power-related data (currentEnergy from l2Data)
+      const powerData = data.l2Data.slice(0, 20).map((item) => ({
+        timestamp: item.timestamp,
+        currentEnergy: item.currentEnergy,
+      }));
+
+      const summaryStats = {
+        totalPowerRecords: data.l2Data.length,
+        averageEnergy: data.l2Data.length
+          ? (
+              data.l2Data.reduce((sum, item) => sum + item.currentEnergy, 0) /
+              data.l2Data.length
+            ).toFixed(2)
+          : 0,
+        minEnergy: data.l2Data.length
+          ? Math.min(...data.l2Data.map((item) => item.currentEnergy))
+          : 0,
+        maxEnergy: data.l2Data.length
+          ? Math.max(...data.l2Data.map((item) => item.currentEnergy))
+          : 0,
+      };
+
+      const promptSize = JSON.stringify(powerData).length;
+      console.log("Prompt size:", promptSize);
+
+      if (promptSize > 50000) {
+        setAiResponse("❌ Power data too large. Please reduce the dataset.");
+        return;
+      }
+
+      const summarizationPrompt = `
+      Summarize the following EV charging power data concisely:
+      - Total power records: ${summaryStats.totalPowerRecords}
+      - Average energy delivered: ${summaryStats.averageEnergy} kWh
+      - Minimum energy: ${summaryStats.minEnergy} kWh
+      - Maximum energy: ${summaryStats.maxEnergy} kWh
+      - Sample power data: ${JSON.stringify(powerData, null, 2)}
+      Highlight trends, anomalies, or significant patterns in the power data.
+      User Query: ${aiPrompt}
+    `;
+
+      const response = await fetch("http://localhost:3001/api/ask-llm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: summarizationPrompt }),
+      });
+
+      const result = await response.json();
+      if (response.ok && result.response) {
+        setAiResponse(result.response);
+      } else {
+        setAiResponse(
+          `❌ Error: ${
+            result.error || "AI server returned an error"
+          } - Details: ${result.details || "None"}`
+        );
+      }
+    } catch (err) {
+      console.error("Frontend fetch error:", err.message);
+      setAiResponse(`❌ Error contacting AI: ${err.message}`);
+    } finally {
+      setIsFetchingAI(false);
     }
   };
 
@@ -1196,6 +1298,48 @@ export default function Dashboard() {
                   ... and {filteredData.errors.length - 5} more
                 </div>
               )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="space-y-4">
+          <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+            💡 Ask AI About Power Data
+          </h2>
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            placeholder="e.g., Summarize the power usage trends in the EV charging log."
+            className="w-full h-28 p-3 text-sm border rounded-lg shadow-sm bg-white dark:bg-gray-800 dark:text-white"
+          />
+          <div className="flex gap-2">
+            <Button onClick={askAIAboutLog} disabled={isFetchingAI}>
+              {isFetchingAI ? "Thinking..." : "Ask"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() =>
+                setAiPrompt(
+                  "Summarize the EV charging power data, focusing on energy delivered, trends, and any anomalies."
+                )
+              }
+            >
+              Use Default Power Summary Prompt
+            </Button>
+            <Button variant="outline" onClick={() => setAiPrompt("")}>
+              Clear Prompt
+            </Button>
+          </div>
+          {isFetchingAI && (
+            <div className="text-sm text-gray-600">
+              Processing AI request...
+            </div>
+          )}
+          {aiResponse && (
+            <div className="bg-gray-100 dark:bg-gray-700 p-4 rounded-md text-sm text-gray-800 dark:text-gray-100 whitespace-pre-wrap">
+              <strong>AI Response (Power Data):</strong>
+              <p>{aiResponse}</p>
             </div>
           )}
         </CardContent>
