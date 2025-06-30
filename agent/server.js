@@ -93,7 +93,7 @@ const PORT = 3001;
 
 // Middleware
 app.use(cors({ origin: 'http://localhost:3000' }));
-app.use(bodyParser.json({ limit: '10mb' }));
+app.use(bodyParser.json({ limit: '20mb' }));
 
 // Health check route
 app.get('/', (req, res) => {
@@ -113,7 +113,7 @@ app.post('/api/ask-llm', async (req, res) => {
     return res.status(400).json({ error: 'Prompt is required' });
   }
 
-  if (prompt.length > 100000) {
+  if (prompt.length > 100000000) {
     return res.status(400).json({ error: 'Prompt is too large.' });
   }
 
@@ -132,7 +132,7 @@ app.post('/api/ask-llm', async (req, res) => {
         },
       },
       {
-        timeout: 1200000,
+        timeout: 12000000,
         validateStatus: status => status >= 200 && status < 500,
       }
     );

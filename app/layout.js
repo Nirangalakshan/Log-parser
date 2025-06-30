@@ -71,7 +71,7 @@ function Layout({ children }) {
                 <img
                   src="/evlogo.png"
                   alt="EV Analyzer Logo"
-                  className="h-full object-contain transition-transform duration-300 scale-180 hover:scale-200 drop-shadow-[0_0_6px_rgba(0,255,255,0.6)]"
+                  className="h-full object-contain transition-transform duration-300 scale-180 hover:scale-200"
                 />
               </div>
 
@@ -95,7 +95,7 @@ function Layout({ children }) {
           {/* Footer stays at the bottom */}
           <footer className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 py-4">
             <div className="container mx-auto px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-              ©{new Date().getFullYear()} EV Charger Analytics V3
+              ©{new Date().getFullYear()} EV Charger Analytics V4
             </div>
           </footer>
         </div>
