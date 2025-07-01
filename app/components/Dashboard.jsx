@@ -1318,275 +1318,335 @@ export default function Dashboard() {
     };
   }, []);
 
-  const parseFile = async (file) => {
-    if (workerRef.current) workerRef.current.terminate();
-    if (abortControllerRef.current) abortControllerRef.current.abort();
+ const parseFile = async (file) => {
+  if (workerRef.current) workerRef.current.terminate();
+  if (abortControllerRef.current) abortControllerRef.current.abort();
 
-    abortControllerRef.current = new AbortController();
-    const signal = abortControllerRef.current.signal;
+  abortControllerRef.current = new AbortController();
+  const signal = abortControllerRef.current.signal;
 
-    setIsLoading(true);
-    setCurrentStage("Reading file...");
-    setProgress({ processed: 0, total: file.size, percentage: 0 });
-    setData({
-      l2Data: [],
-      metricsData: [],
-      l2MainState: [],
-      l2ChildState: [],
-      l2MainContext: [],
-      l2ChildContext: [],
-      memoryUsage: [],
-      errors: [],
-    });
-    bufferedResults.current = {
-      l2Data: [],
-      metricsData: [],
-      l2MainState: [],
-      l2ChildState: [],
-      l2MainContext: [],
-      l2ChildContext: [],
-      memoryUsage: [],
-      errors: [],
-    };
-    setTransactionIds([]);
-    setSelectedTransactionId("");
-    setShowFullGraphs(false);
-    setSelectedParameter("");
+  setIsLoading(true);
+  setCurrentStage("Reading file...");
+  setProgress({ processed: 0, total: file.size, percentage: 0 });
+  setData({
+    l2Data: [],
+    metricsData: [],
+    l2MainState: [],
+    l2ChildState: [],
+    l2MainContext: [],
+    l2ChildContext: [],
+    memoryUsage: [],
+    errors: [],
+  });
+  bufferedResults.current = {
+    l2Data: [],
+    metricsData: [],
+    l2MainState: [],
+    l2ChildState: [],
+    l2MainContext: [],
+    l2ChildContext: [],
+    memoryUsage: [],
+    errors: [],
+  };
+  setTransactionIds([]);
+  setSelectedTransactionId("");
+  setShowFullGraphs(false);
+  setSelectedParameter("");
 
-    try {
-      console.log("Starting file parse for:", file.name);
-      const workerCode = `
-        const regexes = {
-          l2Data: /^(.+?)\\s*info:\\s*L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
-          metricsData: /^(.+?)\\s*info:\\s*MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
-          l2MainState: /(.+?)\\s*info:\\s*L2Main\\s*State\\s*[:\\s]*({.*?})(?:\\s*\\|\\s*L2child\\s+State:\\s*({.*?}))?/i,
-          l2MainContext: /^(.+?)\\s*info:\\s*L2Main\\s*Context:\\s*({.*?transactionId.*?})/i,
-          l2ChildContext: /^(.+?)\\s*info:\\s*L2Child\\s*Context:\\s*({.*?})/i,
-          memory: /^(.+?)\\s*info:\\s*Memory:\\s*({.*?})/i,
-          error: /^(.+?)\\s*info:\\s*error:\\s*(.*)/i
+  try {
+    console.log("Starting file parse for:", file.name);
+    const workerCode = `
+      const regexes = {
+        l2Data: /^(.+?)\\s*info:\\s*L2\\s*Data:\\s*({.*?})\\s*currentEnergy:\\s*(-?\\d+(?:\\.\\d+)?)/i,
+        metricsData: /^(.+?)\\s*info:\\s*MetricsData:\\s*({.*?cpuUsage.*?memoryUsage.*?cpuTemperature.*?diskUsage.*?})(?=\\s*}|$)/i,
+        l2MainState: /(.+?)\\s*info:\\s*L2Main\\s*State\\s*[:\\s]*({.*?})(?:\\s*\\|\\s*L2child\\s+State:\\s*({.*?}))?/i,
+        l2MainAndChildContext: /^(.+?)\\s*info:\\s*L2Main\\s*Context:\\s*({.*?transactionId.*?})\\s*\\|\\s*L2Child\\s*Context:\\s*({.*?})/i,
+        l2MainContext: /^(.+?)\\s*info:\\s*L2Main\\s*Context:\\s*({.*?transactionId.*?})(?!\\s*\\|)/i,
+        l2ChildContext: /^(.+?)\\s*info:\\s*L2Child\\s*Context:\\s*({.*?})(?!\\s*\\|)/i,
+        memory: /^(.+?)\\s*info:\\s*Memory:\\s*({.*?})/i,
+        error: /^(.+?)\\s*info:\\s*error:\\s*(\\w+)?\\s*(?:-\\s*)?(.*)/i,
+        errorLog: /^(.+?)\\s*ERROR:\\s*Error:\\s*(\\w+)/i
+      };
+
+      let allTransactionIds = new Set();
+
+      self.onmessage = function(e) {
+        console.log("Worker received lines:", e.data.lines.length);
+        const lines = e.data.lines;
+        const startLineNumber = e.data.startLineNumber;
+        const batchSize = ${BATCH_SIZE};
+        const results = {
+          l2Data: [], metricsData: [], l2MainState: [], l2ChildState: [],
+          l2MainContext: [], l2ChildContext: [], memoryUsage: [], errors: [],
         };
 
-        let allTransactionIds = new Set();
+        for(let i = 0; i < lines.length; i++) {
+          const line = lines[i];
+          const lineNumber = startLineNumber + i;
+          if (!line || !line.trim()) continue;
 
-        self.onmessage = function(e) {
-          console.log("Worker received lines:", e.data.lines.length);
-          const lines = e.data.lines;
-          const startLineNumber = e.data.startLineNumber;
-          const batchSize = ${BATCH_SIZE};
-          const results = {
-            l2Data: [], metricsData: [], l2MainState: [], l2ChildState: [],
-            l2MainContext: [], l2ChildContext: [], memoryUsage: [], errors: [],
-          };
-
-          for(let i = 0; i < lines.length; i++) {
-            const line = lines[i];
-            const lineNumber = startLineNumber + i;
-            if (!line || !line.trim()) continue;
-
-            for (const [key, regex] of Object.entries(regexes)) {
-              const match = regex.exec(line);
-              if (match) {
-                try {
-                  let jsonData = {};
-                  if (key === "l2Data") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    results.l2Data.push({
-                      timestamp: match[1],
-                      currentEnergy: parseFloat(match[3]),
-                      voltage: jsonData.voltage || null,
-                      current: jsonData.current || null,
-                      transactionId: context ? context.transactionId : null,
-                      ...jsonData
-                    });
-                  } else if (key === "metricsData") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    results.metricsData.push({
-                      timestamp: match[1],
-                      transactionId: context ? context.transactionId : null,
-                      ...jsonData
-                    });
-                  } else if (key === "l2MainContext") {
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const transactionId = typeof jsonData.transactionId === "object" && jsonData.transactionId !== null
-                      ? jsonData.transactionId.id || jsonData.transactionId.toString()
-                      : jsonData.transactionId;
-                    if (transactionId) {
-                      allTransactionIds.add(transactionId);
-                      results.l2MainContext.push({
-                        timestamp: match[1],
-                        transactionId: transactionId,
-                        ...jsonData
-                      });
-                    }
-                  } else if (key === "l2MainState") {
-                    const timestamp = match[1];
-                    const mainStateJson = match[2] ? JSON.parse(match[2].trim().replace(/'/g, '"')) : {};
-                    const childStateJson = match[3] ? JSON.parse(match[3].trim().replace(/'/g, '"')) : {};
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    const combinedState = {
+          for (const [key, regex] of Object.entries(regexes)) {
+            const match = regex.exec(line);
+            if (match) {
+              try {
+                let jsonData = {};
+                if (key === "l2Data") {
+                  jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results.l2Data.push({
+                    timestamp: match[1],
+                    currentEnergy: parseFloat(match[3]),
+                    voltage: jsonData.voltage || null,
+                    current: jsonData.current || null,
+                    transactionId: context ? context.transactionId : null,
+                    ...jsonData
+                  });
+                } else if (key === "metricsData") {
+                  jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results.metricsData.push({
+                    timestamp: match[1],
+                    transactionId: context ? context.transactionId : null,
+                    ...jsonData
+                  });
+                } else if (key === "l2MainAndChildContext") {
+                  const timestamp = match[1];
+                  const mainContextJson = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const childContextJson = JSON.parse(match[3].trim().replace(/'/g, '"'));
+                  const transactionId = typeof mainContextJson.transactionId === "object" && mainContextJson.transactionId !== null
+                    ? mainContextJson.transactionId.id || mainContextJson.transactionId.toString()
+                    : mainContextJson.transactionId;
+                  if (transactionId) {
+                    allTransactionIds.add(transactionId);
+                    results.l2MainContext.push({
                       timestamp: timestamp,
-                      transactionId: context ? context.transactionId : null,
-                      ...mainStateJson
-                    };
-                    if (Object.keys(childStateJson).length === 1) {
-                      const [childKey] = Object.keys(childStateJson);
-                      combinedState[childKey] = childStateJson[childKey];
-                    }
-                    if (Object.keys(combinedState).length > 1) {
-                      results.l2MainState.push(combinedState);
-                    }
-                    if (Object.keys(childStateJson).length > 0) {
-                      results.l2ChildState.push({
-                        timestamp: timestamp,
-                        transactionId: context ? context.transactionId : null,
-                        ...childStateJson
-                      });
-                    }
-                    console.log("Matched l2MainState at line " + lineNumber + ":", { timestamp: match[1], rawLine: line, matchGroups: match, parsedData: combinedState });
-                  } else if (key === "error") {
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    results.errors.push({
-                      timestamp: match[1],
-                      message: match[2],
-                      transactionId: context ? context.transactionId : null
+                      transactionId: transactionId,
+                      ...mainContextJson
                     });
-                  } else {
-                    const outKey = key === "memory" ? "memoryUsage" : key;
-                    jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
-                    const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
-                    results[outKey].push({
+                  }
+                  results.l2ChildContext.push({
+                    timestamp: timestamp,
+                    transactionId: transactionId,
+                    ...childContextJson
+                  });
+                  // Extract errorCode from L2Child Context if present
+                  if (childContextJson.errorCode) {
+                    results.errors.push({
+                      timestamp: timestamp,
+                      errorCode: childContextJson.errorCode,
+                      message: childContextJson.errorMessage || 'L2Child Context error',
+                      transactionId: transactionId
+                    });
+                  }
+                } else if (key === "l2MainContext") {
+                  jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const transactionId = typeof jsonData.transactionId === "object" && jsonData.transactionId !== null
+                    ? jsonData.transactionId.id || jsonData.transactionId.toString()
+                    : jsonData.transactionId;
+                  if (transactionId) {
+                    allTransactionIds.add(transactionId);
+                    results.l2MainContext.push({
                       timestamp: match[1],
-                      transactionId: context ? context.transactionId : null,
+                      transactionId: transactionId,
                       ...jsonData
                     });
                   }
-                } catch (err) {
-                  results.errors.push({
-                    timestamp: match ? match[1] : "Line " + lineNumber,
-                    message: err.message + ' - Raw: ' + line,
-                    transactionId: null
+                } else if (key === "l2ChildContext") {
+                  jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results.l2ChildContext.push({
+                    timestamp: match[1],
+                    transactionId: context ? context.transactionId : null,
+                    ...jsonData
                   });
-                  console.log("Parsing error on line:", lineNumber, "Error:", err, "Raw line:", line);
+                  // Extract errorCode from L2Child Context if present
+                  if (jsonData.errorCode) {
+                    results.errors.push({
+                      timestamp: match[1],
+                      errorCode: jsonData.errorCode,
+                      message: jsonData.errorMessage || 'L2Child Context error',
+                      transactionId: context ? context.transactionId : null
+                    });
+                  }
+                } else if (key === "l2MainState") {
+                  const timestamp = match[1];
+                  const mainStateJson = match[2] ? JSON.parse(match[2].trim().replace(/'/g, '"')) : {};
+                  const childStateJson = match[3] ? JSON.parse(match[3].trim().replace(/'/g, '"')) : {};
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  const combinedState = {
+                    timestamp: timestamp,
+                    transactionId: context ? context.transactionId : null,
+                    ...mainStateJson
+                  };
+                  if (Object.keys(childStateJson).length === 1) {
+                    const [childKey] = Object.keys(childStateJson);
+                    combinedState[childKey] = childStateJson[childKey];
+                  }
+                  if (Object.keys(combinedState).length > 1) {
+                    results.l2MainState.push(combinedState);
+                  }
+                  if (Object.keys(childStateJson).length > 0) {
+                    results.l2ChildState.push({
+                      timestamp: timestamp,
+                      transactionId: context ? context.transactionId : null,
+                      ...childStateJson
+                    });
+                  }
+                  console.log("Matched l2MainState at line " + lineNumber + ":", { timestamp: match[1], rawLine: line, matchGroups: match, parsedData: combinedState });
+                } else if (key === "error") {
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results.errors.push({
+                    timestamp: match[1],
+                    errorCode: match[2] || null,
+                    message: match[3] || 'No message',
+                    transactionId: context ? context.transactionId : null
+                  });
+                } else if (key === "errorLog") {
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results.errors.push({
+                    timestamp: match[1],
+                    errorCode: match[2],
+                    message: 'Error from log',
+                    transactionId: context ? context.transactionId : null
+                  });
+                } else {
+                  const outKey = key === "memory" ? "memoryUsage" : key;
+                  jsonData = JSON.parse(match[2].trim().replace(/'/g, '"'));
+                  const context = results.l2MainContext.find((c) => c.timestamp === match[1]);
+                  results[outKey].push({
+                    timestamp: match[1],
+                    transactionId: context ? context.transactionId : null,
+                    ...jsonData
+                  });
                 }
-                break;
+              } catch (err) {
+                results.errors.push({
+                  timestamp: match ? match[1] : "Line " + lineNumber,
+                  errorCode: null,
+                  message: err.message + ' - Raw: ' + line,
+                  transactionId: null
+                });
+                console.log("Parsing error on line:", lineNumber, "Error:", err, "Raw line:", line);
               }
+              break;
             }
           }
-
-          console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds));
-          self.postMessage({ type: 'batch', results: results, processed: lines.length });
-
-          if (e.data.lines.length < batchSize) {
-            console.log("Final transaction IDs:", Array.from(allTransactionIds));
-            self.postMessage({ type: 'final', transactionIds: Array.from(allTransactionIds) });
-          }
-        };
-      `;
-
-      const blob = new Blob([workerCode], { type: "application/javascript" });
-      workerRef.current = new Worker(URL.createObjectURL(blob));
-      console.log("Worker initialized:", workerRef.current);
-
-      const CHUNK_SIZE = 1024 * 512;
-      let offset = 0;
-      const fileSize = file.size;
-      let fileText = "";
-
-      while (offset < fileSize) {
-        if (signal.aborted) {
-          console.log("Parsing aborted at offset:", offset);
-          setIsLoading(false);
-          setCurrentStage("Parsing cancelled");
-          return;
         }
 
-        const chunk = file.slice(offset, offset + CHUNK_SIZE);
-        const chunkText = await chunk.text();
-        fileText += chunkText;
-        console.log(`Read chunk at offset ${offset}, size: ${chunkText.length}`);
+        console.log("Parsed transaction IDs from batch:", Array.from(allTransactionIds));
+        self.postMessage({ type: 'batch', results: results, processed: lines.length });
 
-        offset += CHUNK_SIZE;
-        setProgress({
-          processed: offset,
-          total: fileSize,
-          percentage: Math.min(100, Math.floor((offset / fileSize) * 20)),
-        });
-        await new Promise((res) => setTimeout(res, 1));
-      }
-
-      setCurrentStage("Processing lines...");
-      const allLines = fileText.split(/\r?\n/);
-      console.log("Total lines to process:", allLines.length);
-      const totalLines = allLines.length;
-      setProgress({ processed: 0, total: totalLines, percentage: 20 });
-
-      let currentIndex = 0;
-
-      workerRef.current.onmessage = (e) => {
-        const { type, results, processed, transactionIds } = e.data;
-        console.log(`Received message type: ${type}, processed: ${processed}, results:`, results);
-        if (type === "batch") {
-          console.log("Worker results:", results);
-          Object.entries(results).forEach(([key, arr]) => {
-            bufferedResults.current[key].push(...arr);
-          });
-
-          setProgress((prev) => {
-            const newProcessed = prev.processed + processed;
-            if (newProcessed % 1000 < BATCH_SIZE || newProcessed >= totalLines) {
-              flushBuffer();
-            }
-            return {
-              processed: newProcessed,
-              total: totalLines,
-              percentage: Math.min(100, 20 + Math.floor((newProcessed / totalLines) * 80)),
-            };
-          });
-
-          if (currentIndex < totalLines) {
-            const batchLines = allLines.slice(currentIndex, currentIndex + BATCH_SIZE);
-            workerRef.current.postMessage({
-              lines: batchLines,
-              startLineNumber: currentIndex + 1,
-            });
-            currentIndex += BATCH_SIZE;
-          }
-        } else if (type === "final") {
-          console.log("Received final transaction IDs:", transactionIds);
-          setTransactionIds((prev) => [...new Set([...prev, ...transactionIds])]);
-          flushBuffer();
-          console.log(
-            "Final data lengths - l2Data:",
-            data.l2Data.length,
-            "l2MainState:",
-            data.l2MainState.length,
-            "l2ChildState:",
-            data.l2ChildState.length,
-            "l2MainContext:",
-            data.l2MainContext.length,
-            "errors:",
-            data.errors.length
-          );
-          setIsLoading(false);
-          setCurrentStage("Parsing complete!");
-          workerRef.current.terminate();
-          workerRef.current = null;
+        if (e.data.lines.length < batchSize) {
+          console.log("Final transaction IDs:", Array.from(allTransactionIds));
+          self.postMessage({ type: 'final', transactionIds: Array.from(allTransactionIds) });
         }
       };
+    `;
 
-      const firstBatch = allLines.slice(0, BATCH_SIZE);
-      currentIndex = BATCH_SIZE;
-      workerRef.current.postMessage({ lines: firstBatch, startLineNumber: 1 });
-      console.log("Sent first batch, size:", firstBatch.length);
-    } catch (err) {
-      console.error("Error during parsing:", err);
-      setIsLoading(false);
-      setCurrentStage("Error during parsing");
-      setData((prev) => ({ ...prev, errors: [...prev.errors, err.message] }));
+    const blob = new Blob([workerCode], { type: "application/javascript" });
+    workerRef.current = new Worker(URL.createObjectURL(blob));
+    console.log("Worker initialized:", workerRef.current);
+
+    const CHUNK_SIZE = 1024 * 512;
+    let offset = 0;
+    const fileSize = file.size;
+    let fileText = "";
+
+    while (offset < fileSize) {
+      if (signal.aborted) {
+        console.log("Parsing aborted at offset:", offset);
+        setIsLoading(false);
+        setCurrentStage("Parsing cancelled");
+        return;
+      }
+
+      const chunk = file.slice(offset, offset + CHUNK_SIZE);
+      const chunkText = await chunk.text();
+      fileText += chunkText;
+      console.log(`Read chunk at offset ${offset}, size: ${chunkText.length}`);
+
+      offset += CHUNK_SIZE;
+      setProgress({
+        processed: offset,
+        total: fileSize,
+        percentage: Math.min(100, Math.floor((offset / fileSize) * 20)),
+      });
+      await new Promise((res) => setTimeout(res, 1));
     }
-  };
+
+    setCurrentStage("Processing lines...");
+    const allLines = fileText.split(/\r?\n/);
+    console.log("Total lines to process:", allLines.length);
+    const totalLines = allLines.length;
+    setProgress({ processed: 0, total: totalLines, percentage: 20 });
+
+    let currentIndex = 0;
+
+    workerRef.current.onmessage = (e) => {
+      const { type, results, processed, transactionIds } = e.data;
+      console.log(`Received message type: ${type}, processed: ${processed}, results:`, results);
+      if (type === "batch") {
+        console.log("Worker results:", results);
+        Object.entries(results).forEach(([key, arr]) => {
+          bufferedResults.current[key].push(...arr);
+        });
+
+        setProgress((prev) => {
+          const newProcessed = prev.processed + processed;
+          if (newProcessed % 1000 < BATCH_SIZE || newProcessed >= totalLines) {
+            flushBuffer();
+          }
+          return {
+            processed: newProcessed,
+            total: totalLines,
+            percentage: Math.min(100, 20 + Math.floor((newProcessed / totalLines) * 80)),
+          };
+        });
+
+        if (currentIndex < totalLines) {
+          const batchLines = allLines.slice(currentIndex, currentIndex + BATCH_SIZE);
+          workerRef.current.postMessage({
+            lines: batchLines,
+            startLineNumber: currentIndex + 1,
+          });
+          currentIndex += BATCH_SIZE;
+        }
+      } else if (type === "final") {
+        console.log("Received final transaction IDs:", transactionIds);
+        setTransactionIds((prev) => [...new Set([...prev, ...transactionIds])]);
+        flushBuffer();
+        console.log(
+          "Final data lengths - l2Data:",
+          data.l2Data.length,
+          "l2MainState:",
+          data.l2MainState.length,
+          "l2ChildState:",
+          data.l2ChildState.length,
+          "l2MainContext:",
+          data.l2MainContext.length,
+          "l2ChildContext:",
+          data.l2ChildContext.length,
+          "errors:",
+          data.errors.length
+        );
+        setIsLoading(false);
+        setCurrentStage("Parsing complete!");
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+
+    const firstBatch = allLines.slice(0, BATCH_SIZE);
+    currentIndex = BATCH_SIZE;
+    workerRef.current.postMessage({ lines: firstBatch, startLineNumber: 1 });
+    console.log("Sent first batch, size:", firstBatch.length);
+  } catch (err) {
+    console.error("Error during parsing:", err);
+    setIsLoading(false);
+    setCurrentStage("Error during parsing");
+    setData((prev) => ({ ...prev, errors: [...prev.errors, { timestamp: new Date().toISOString(), errorCode: null, message: err.message, transactionId: null }] }));
+  }
+};
 
   const askAIAboutLog = async () => {
     if (!aiPrompt.trim() || !Object.keys(data).some(key => data[key].length > 0)) {
