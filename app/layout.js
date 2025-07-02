@@ -95,7 +95,7 @@ function Layout({ children }) {
           {/* Footer stays at the bottom */}
           <footer className="bg-white/80 dark:bg-gray-800/80 backdrop-blur-lg border-t border-gray-200 dark:border-gray-700 py-4">
             <div className="container mx-auto px-4 text-center text-sm text-gray-500 dark:text-gray-400">
-              ©{new Date().getFullYear()} EV Charger Analytics V4
+              ©{new Date().getFullYear()} EV Charger Analytics V4.1
             </div>
           </footer>
         </div>
